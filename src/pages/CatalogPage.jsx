@@ -16,7 +16,6 @@ export default function CatalogPage({ onCartOpen }) {
   return (
     <ProductsCatalogSection
       onCartOpen={onCartOpen}
-      sidebarNavigates={false}
     />
   )
 }

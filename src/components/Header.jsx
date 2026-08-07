@@ -1,15 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import CategoryNavPanel from './CategoryNavPanel'
 import CollectionsNavPanel from './CollectionsNavPanel'
 import MobileNavDrawer from './MobileNavDrawer'
+import { getCategories } from '../api/categories'
 import { searchProducts } from '../api/products'
 import { useAuth } from '../context/AuthContext'
 import { useFavorites } from '../context/FavoritesContext'
 import { useCart } from '../context/CartContext'
+import { categoryUrl } from '../utils/categoryUrl'
 import { productUrl } from '../utils/productUrl'
 
 const CATEGORY_NAV_ROOTS = ['Мебель', 'Освещение', 'Аксессуары', 'Для улицы']
+const ROOT_NAME_ALIASES = {
+  'Для улицы': ['Для улицы', 'Уличная мебель', 'Outdoor'],
+}
 
 const TOP_LINKS = [
   { id: 'designers', label: 'Дизайнерам' },
@@ -18,7 +23,7 @@ const TOP_LINKS = [
 ]
 
 const NAV_ITEMS = [
-  { id: 'collections', label: 'NEW', megaMenu: 'collections' },
+  { id: 'collections', label: 'New', megaMenu: 'collections' },
   ...CATEGORY_NAV_ROOTS.map((name) => ({
     id: `category-${name}`,
     label: name,
@@ -123,8 +128,10 @@ export default function Header({
   const searchRef = useRef(null)
   const searchInputRef = useRef(null)
   const location = useLocation()
+  const navigate = useNavigate()
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [categoryRootsByName, setCategoryRootsByName] = useState({})
 
   const [isHidden, setIsHidden] = useState(false)
   const lastScrollYRef = useRef(0)
@@ -133,6 +140,26 @@ export default function Header({
   useEffect(() => {
     isSearchOpenRef.current = isSearchOpen
   }, [isSearchOpen])
+
+  useEffect(() => {
+    let cancelled = false
+    getCategories(true)
+      .then((cats) => {
+        if (cancelled) return
+        const map = {}
+        for (const name of CATEGORY_NAV_ROOTS) {
+          const names = new Set(ROOT_NAME_ALIASES[name] || [name])
+          map[name] = (cats || []).find((c) => names.has(c.name) && c.parent_id == null) || null
+        }
+        setCategoryRootsByName(map)
+      })
+      .catch(() => {
+        if (!cancelled) setCategoryRootsByName({})
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     setOpenMegaMenu(null)
@@ -488,7 +515,17 @@ export default function Header({
                   className={`header__nav-link header__nav-link--mega${activePage === item.id ? ' header__nav-link--active' : ''}${openMegaMenu === item.megaMenu ? ' header__nav-link--mega-open' : ''}`}
                   aria-expanded={openMegaMenu === item.megaMenu}
                   aria-controls={megaMenuControlsId(item.megaMenu)}
-                  onClick={() => setOpenMegaMenu((current) => (current === item.megaMenu ? null : item.megaMenu))}
+                  onClick={() => {
+                    if (item.rootName) {
+                      const root = categoryRootsByName[item.rootName]
+                      if (root) {
+                        closeMegaMenu()
+                        navigate(categoryUrl(root))
+                        return
+                      }
+                    }
+                    setOpenMegaMenu((current) => (current === item.megaMenu ? null : item.megaMenu))
+                  }}
                 >
                   <span>{item.label}</span>
                   <IconChevronDown />

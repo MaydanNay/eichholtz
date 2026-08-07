@@ -110,14 +110,14 @@ export default function Footer() {
                 href={social.url}
                 target="_blank"
                 rel="nofollow noopener"
-                className="footer__social-link"
+                className={`footer__social-link${social.iconUrl ? ' footer__social-link--icon' : ''}`}
                 title={social.name}
               >
                 {social.iconUrl ? (
                   <img
                     src={social.iconUrl}
                     alt={social.name}
-                    style={{ width: '24px', height: '24px', objectFit: 'contain' }}
+                    className="footer__social-icon"
                   />
                 ) : (
                   social.name

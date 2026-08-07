@@ -51,20 +51,37 @@ function toHighResImageUrl(url) {
   return url.replace(/\/cache\/[a-f0-9]+\//gi, '/')
 }
 
+/** Eichholtz primary catalog photo is usually SKU_0_N.jpg */
+function isPrimaryCatalogPhoto(url) {
+  const file = String(url).split('/').pop()?.split('?')[0] || ''
+  return /^\d+_0_\d+\.(jpe?g|png|webp)$/i.test(file)
+}
+
+function orderProductImages(images, mainUrl) {
+  const list = []
+  const seen = new Set()
+  for (const raw of [...images, mainUrl]) {
+    const url = toHighResImageUrl(raw)
+    if (!url || seen.has(url)) continue
+    seen.add(url)
+    list.push(url)
+  }
+  if (list.length <= 1) return list
+
+  const primary = list.find(isPrimaryCatalogPhoto)
+  if (!primary) return list
+  return [primary, ...list.filter((url) => url !== primary)]
+}
+
 function normalizeProduct(row) {
   if (!row) return row
 
-  let images = parseImages(row.images).map(toHighResImageUrl)
-  let mainUrl = toHighResImageUrl(row.image_url)
-
-  if (images.length === 0 && mainUrl) {
-    images = [mainUrl]
-  }
+  const images = orderProductImages(parseImages(row.images), row.image_url)
 
   return {
     ...row,
     images,
-    image_url: images[0] || mainUrl || '',
+    image_url: images[0] || '',
   }
 }
 

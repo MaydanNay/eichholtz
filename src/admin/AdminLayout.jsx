@@ -54,7 +54,7 @@ export default function AdminLayout() {
   return (
     <AdminSearchProvider value={{ query: searchQuery, setQuery: setSearchQuery }}>
       <div className="admin">
-        <aside className="admin-sidebar custom-scroll custom-scroll--dark">
+        <aside className="admin-sidebar">
           <div className="admin-sidebar__brand">
             <span>Eichholtz</span>
             <small>Админ</small>

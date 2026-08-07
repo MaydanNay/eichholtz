@@ -119,9 +119,6 @@ export default function CollectionPage({ collectionId, onCartOpen }) {
           {collection.season_name && (
             <p className="collection-page__season">{collection.season_name}</p>
           )}
-          {collection.is_new && (
-            <span style={{ background: 'var(--color-sec-metallic-gold)', color: 'var(--color-core-white)', fontSize: '0.8rem', padding: '4px 12px', borderRadius: '0', textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 500, marginBottom: '0.5rem', display: 'inline-block' }}>Новинка</span>
-          )}
           <h1 className="collection-page__title">
             {collection.name}
           </h1>
@@ -141,36 +138,30 @@ export default function CollectionPage({ collectionId, onCartOpen }) {
         </div>
       </Reveal>
 
-      {isCategory && (
+      {isCategory && collectionCatalogs.length > 0 && (
         <section className="catalogs" style={{ paddingTop: '4rem', paddingBottom: '2rem', borderTop: '1px solid var(--color-core-light-grey)' }}>
           <Reveal variant="blur-up">
             <h2 className="catalogs__title section-heading" style={{ marginBottom: '3rem' }}>Каталоги коллекции</h2>
           </Reveal>
-          {collectionCatalogs.length > 0 ? (
-            <div className="catalogs__grid">
-              {collectionCatalogs.map(cat => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  className="catalog-card"
-                  onClick={() => cat.pdf_url ? window.open(cat.pdf_url, '_blank') : null}
-                >
-                  <span className="catalog-card__media">
-                    <img
-                      src={cat.image_url || collection.image_url || '/logo.webp'}
-                      alt=""
-                      className={`catalog-card__img ${!(cat.image_url || collection.image_url) ? 'img-fallback' : ''}`}
-                    />
-                  </span>
-                  <p className="catalog-card__title">{cat.name}</p>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="catalogs__empty" style={{ textAlign: 'center', color: 'var(--color-core-dark-grey)' }}>
-              У коллекции нет каталогов
-            </p>
-          )}
+          <div className="catalogs__grid">
+            {collectionCatalogs.map(cat => (
+              <button
+                key={cat.id}
+                type="button"
+                className="catalog-card"
+                onClick={() => cat.pdf_url ? window.open(cat.pdf_url, '_blank') : null}
+              >
+                <span className="catalog-card__media">
+                  <img
+                    src={cat.image_url || collection.image_url || '/logo.webp'}
+                    alt=""
+                    className={`catalog-card__img ${!(cat.image_url || collection.image_url) ? 'img-fallback' : ''}`}
+                  />
+                </span>
+                <p className="catalog-card__title">{cat.name}</p>
+              </button>
+            ))}
+          </div>
         </section>
       )}
 

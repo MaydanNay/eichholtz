@@ -158,7 +158,6 @@ export default function ProductsCatalogSection({
   onClearCollectionFilter,
   onClearSearchQuery,
   onCartOpen,
-  sidebarNavigates = false,
   hideSidebar = false,
 }) {
   const [products, setProducts] = useState([])
@@ -246,92 +245,57 @@ export default function ProductsCatalogSection({
     const isExpanded = !!expandedCategories[c.id]
     const isActive = localCategoryFilters.includes(c.id)
     
-    const handleCategoryClick = (e) => {
-      if (sidebarNavigates) return
-      setLocalCategoryFilters(prev => {
+    const handleCategoryClick = () => {
+      setLocalCategoryFilters((prev) => {
         if (prev.includes(c.id)) {
-          return prev.filter(id => id !== c.id)
+          return prev.filter((id) => id !== c.id)
         }
         return [...prev, c.id]
       })
     }
+
+    const handleNameClick = (e) => {
+      e.preventDefault()
+      if (hasChildren) toggleCategory(c.id, e)
+    }
     
     return (
       <li key={c.id}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingLeft: level > 0 ? `${level * 1}rem` : undefined }}>
-          {sidebarNavigates ? (
-            <Link
-              to={categoryUrl(c)}
-              className={`products-catalog__spec-label ${isActive ? 'active' : ''}`}
-              style={{ flexGrow: 1, textDecoration: 'none' }}
+        <div
+          className="products-catalog__spec-label"
+          style={{ flexGrow: 1, margin: 0, padding: 0, paddingLeft: level > 0 ? `${level * 1}rem` : undefined, cursor: 'default' }}
+        >
+          <label className="products-catalog__spec-check" title="Выбрать категорию">
+            <input 
+              type="checkbox" 
+              className="products-catalog__spec-checkbox-input"
+              checked={isActive || false}
+              onChange={handleCategoryClick}
+            />
+            <span className="products-catalog__spec-checkbox-custom">
+              {isActive && <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+            </span>
+          </label>
+          <button
+            type="button"
+            className={`products-catalog__spec-value-name ${isActive ? 'active' : ''}${hasChildren ? ' products-catalog__spec-value-name--toggle' : ''}`}
+            onClick={handleNameClick}
+            aria-expanded={hasChildren ? isExpanded : undefined}
+          >
+            {c.name}
+          </button>
+          {hasChildren && (
+            <button
+              type="button"
+              className="products-catalog__sidebar-toggle"
+              onClick={(e) => { e.preventDefault(); toggleCategory(c.id, e); }}
+              aria-label="Свернуть/развернуть"
+              style={{ padding: 0, marginLeft: 'auto' }}
             >
-              <div 
-                style={{ 
-                  width: 16, height: 16, 
-                  border: `1px solid ${isActive ? 'var(--color-core-black)' : 'var(--color-core-dark-grey)'}`, 
-                  borderRadius: 2, 
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: isActive ? 'var(--color-core-black)' : 'transparent',
-                  flexShrink: 0
-                }}
-              >
-                {isActive && <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-              </div>
-              <span className="products-catalog__spec-value-name">{c.name}</span>
-              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                {hasChildren && (
-                  <button
-                    type="button"
-                    className="products-catalog__sidebar-toggle"
-                    onClick={(e) => { e.preventDefault(); toggleCategory(c.id, e); }}
-                    aria-label="Свернуть/развернуть"
-                    style={{ padding: 0 }}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: 'inherit' }}>
-                      <path d="M2 4L6 8L10 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </Link>
-          ) : (
-            <label className="products-catalog__spec-label" style={{ flexGrow: 1, margin: 0, padding: 0 }}>
-              <input 
-                type="checkbox" 
-                className="products-catalog__spec-checkbox-input"
-                checked={isActive || false}
-                onChange={handleCategoryClick}
-              />
-              <span className="products-catalog__spec-checkbox-custom" onClick={(e) => { e.preventDefault(); handleCategoryClick(e); }}>
-                {isActive && <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-              </span>
-              <span 
-                className={`products-catalog__spec-value-name ${isActive ? 'active' : ''}`}
-                onClick={(e) => {
-                  e.preventDefault()
-                  if (hasChildren) toggleCategory(c.id, e)
-                  else handleCategoryClick(e)
-                }}
-                style={{ cursor: 'pointer' }}
-              >
-                {c.name}
-              </span>
-              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                {hasChildren && (
-                  <button
-                    type="button"
-                    className="products-catalog__sidebar-toggle"
-                    onClick={(e) => { e.preventDefault(); toggleCategory(c.id, e); }}
-                    aria-label="Свернуть/развернуть"
-                    style={{ padding: 0 }}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: 'inherit' }}>
-                      <path d="M2 4L6 8L10 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </label>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', color: 'inherit' }}>
+                <path d="M2 4L6 8L10 4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
           )}
         </div>
         {hasChildren && isExpanded && (
@@ -391,17 +355,23 @@ export default function ProductsCatalogSection({
   useEffect(() => {
     setLoading(true)
     setCurrentPage(1)
+    const categoryIds =
+      localCategoryFilters.length > 0
+        ? localCategoryFilters
+        : categoryFilter != null
+          ? [categoryFilter]
+          : []
     getProducts({
       collectionId: collectionFilter || undefined,
       catalogId: catalogFilter || undefined,
-      categoryId: localCategoryFilters.length > 0 ? localCategoryFilters.join(',') : undefined,
+      categoryId: categoryIds.length > 0 ? categoryIds.join(',') : undefined,
       q: searchQuery || undefined,
       limit: searchQuery ? 100 : undefined,
     })
       .then(setProducts)
       .catch(() => setProducts([]))
       .finally(() => setLoading(false))
-  }, [collectionFilter, catalogFilter, localCategoryFilters, searchQuery])
+  }, [collectionFilter, catalogFilter, categoryFilter, localCategoryFilters, searchQuery])
 
   // Clear spec filters when category or collection changes
   useEffect(() => {
@@ -641,18 +611,9 @@ export default function ProductsCatalogSection({
                   {expandedSpecs['_categories'] && (
                     <ul className="products-catalog__sidebar-list" style={{ marginTop: 0 }}>
                       <li>
-                        {sidebarNavigates ? (
-                          <Link
-                            to="/"
-                            state={{ scrollTo: 'products', menuTs: Date.now() }}
-                            className={`products-catalog__sidebar-link ${localCategoryFilters.length === 0 && !collectionFilter && !catalogFilter ? 'active' : ''}`}
-                          >
-                            Все
-                          </Link>
-                        ) : (
                           <button
                             type="button"
-                            className={`products-catalog__sidebar-link ${localCategoryFilters.length === 0 && !collectionFilter && !catalogFilter ? 'active' : ''}`}
+                            className={`products-catalog__sidebar-link ${localCategoryFilters.length === 0 ? 'active' : ''}`}
                             onClick={() => {
                               setLocalCategoryFilters([])
                               if (onClearCollectionFilter) onClearCollectionFilter()
@@ -660,7 +621,6 @@ export default function ProductsCatalogSection({
                           >
                             Все
                           </button>
-                        )}
                       </li>
                       {categoriesTree.map((c) => renderCategory(c))}
                     </ul>
@@ -726,21 +686,29 @@ export default function ProductsCatalogSection({
                                 }
                               
                               return (
-                                <label key={value} className="products-catalog__spec-label">
+                                <label key={value} className={`products-catalog__spec-label${swatchBg ? ' products-catalog__spec-label--swatch' : ''}`}>
                                   <input 
                                     type="checkbox" 
                                     className="products-catalog__spec-checkbox-input"
                                     checked={isSelected || false}
                                     onChange={() => toggleSpecValue(spec.originalKey, value)}
                                   />
-                                  <span className="products-catalog__spec-checkbox-custom">
-                                    {isSelected && <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                                  </span>
+                                  {!swatchBg && (
+                                    <span className="products-catalog__spec-checkbox-custom">
+                                      {isSelected && <svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                                    </span>
+                                  )}
                                   {swatchBg && (
-                                    <span 
-                                      className="products-catalog__spec-swatch"
+                                    <span
+                                      className={`products-catalog__spec-swatch${isSelected ? ' is-selected' : ''}`}
                                       style={{ background: swatchBg }}
-                                    ></span>
+                                    >
+                                      {isSelected && (
+                                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                                          <path d="M2 6L5 9L10 3" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                        </svg>
+                                      )}
+                                    </span>
                                   )}
                                   <span className="products-catalog__spec-value-name">{translateSpecValue(value)}</span>
                                   <span className="products-catalog__spec-value-count">({count})</span>

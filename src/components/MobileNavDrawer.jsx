@@ -7,6 +7,9 @@ import { collectionUrl } from '../utils/collectionUrl'
 
 const CATALOG_SEASON_NAME = 'Каталоги'
 const CATEGORY_ROOTS = ['Мебель', 'Освещение', 'Аксессуары', 'Для улицы']
+const ROOT_NAME_ALIASES = {
+  'Для улицы': ['Для улицы', 'Уличная мебель', 'Outdoor'],
+}
 
 const SECONDARY_LINKS = [
   { id: 'contract', label: 'Контракт' },
@@ -63,8 +66,8 @@ function buildCategoryPanel(category, title, childrenOf) {
   const children = childrenOf(category.id)
   return {
     title,
-    allTo: categoryUrl(category),
-    allLabel: `Все ${title.toLowerCase()}`,
+    allTo: null,
+    allLabel: null,
     items: children.map((child) => {
       const hasKids = childrenOf(child.id).length > 0
       return {
@@ -72,7 +75,7 @@ function buildCategoryPanel(category, title, childrenOf) {
         label: child.name,
         category: child,
         hasKids,
-        to: hasKids ? null : categoryUrl(child),
+        to: categoryUrl(child),
       }
     }),
   }
@@ -125,7 +128,8 @@ export default function MobileNavDrawer({ isOpen, onClose, onNavigate }) {
   const rootsByName = useMemo(() => {
     const map = {}
     for (const name of CATEGORY_ROOTS) {
-      map[name] = categories.find((c) => c.name === name && c.parent_id == null) || null
+      const names = new Set(ROOT_NAME_ALIASES[name] || [name])
+      map[name] = categories.find((c) => names.has(c.name) && c.parent_id == null) || null
     }
     return map
   }, [categories])
@@ -143,7 +147,7 @@ export default function MobileNavDrawer({ isOpen, onClose, onNavigate }) {
   const openNewPanel = () => {
     setStack([
       {
-        title: 'NEW',
+        title: 'New',
         links: newCollections.map((collection) => ({
           key: `col-${collection.id}`,
           label: collection.name,
@@ -209,15 +213,23 @@ export default function MobileNavDrawer({ isOpen, onClose, onNavigate }) {
               ))}
               {panel.items?.map((item) =>
                 item.hasKids ? (
-                  <button
-                    key={item.key}
-                    type="button"
-                    className="header__mobile-panel-link header__mobile-panel-link--btn"
-                    onClick={() => openCategoryPanel(item.category)}
-                  >
-                    <span>{item.label}</span>
-                    <IconChevronRight />
-                  </button>
+                  <div key={item.key} className="header__mobile-panel-row">
+                    <Link
+                      to={item.to}
+                      className="header__mobile-panel-link"
+                      onClick={handleClose}
+                    >
+                      {item.label}
+                    </Link>
+                    <button
+                      type="button"
+                      className="header__mobile-panel-link header__mobile-panel-link--btn header__mobile-panel-link--chevron"
+                      aria-label={`Подкатегории: ${item.label}`}
+                      onClick={() => openCategoryPanel(item.category)}
+                    >
+                      <IconChevronRight />
+                    </button>
+                  </div>
                 ) : (
                   <Link
                     key={item.key}
@@ -234,7 +246,7 @@ export default function MobileNavDrawer({ isOpen, onClose, onNavigate }) {
             <>
               <nav className="header__mobile-nav" aria-label="Каталог">
                 <button type="button" className="header__mobile-nav-link" onClick={openNewPanel}>
-                  <span>NEW</span>
+                  <span>New</span>
                   <IconChevronRight />
                 </button>
 

@@ -182,7 +182,7 @@ export default function ContactsSettingsPage() {
               {contacts.socials?.length ? contacts.socials.map(s => (
                 <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                   {s.iconUrl ? (
-                    <img src={s.iconUrl} alt={s.name} style={{ width: '32px', height: '32px', objectFit: 'contain', background: 'var(--color-core-black)', borderRadius: '4px', padding: '4px' }} />
+                    <img src={s.iconUrl} alt={s.name} style={{ width: '32px', height: '32px', objectFit: 'contain', borderRadius: '4px', padding: '4px' }} />
                   ) : (
                     <div style={{ width: '32px', height: '32px', background: 'var(--color-ui-bg-light)', borderRadius: '4px' }}></div>
                   )}
@@ -286,7 +286,7 @@ export default function ContactsSettingsPage() {
                 <div key={s.id} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', padding: '1rem', border: '1px solid var(--color-core-light-grey)', borderRadius: '4px', background: 'var(--color-ui-bg-light)' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
                     {s.iconUrl ? (
-                      <img src={s.iconUrl} alt="" style={{ width: '48px', height: '48px', objectFit: 'contain', border: '1px solid var(--color-core-light-grey)', background: 'var(--color-core-black)', borderRadius: '4px' }} />
+                      <img src={s.iconUrl} alt="" style={{ width: '48px', height: '48px', objectFit: 'contain', border: '1px solid var(--color-core-light-grey)', background: 'transparent', borderRadius: '4px' }} />
                     ) : (
                       <div style={{ width: '48px', height: '48px', border: '1px dashed var(--color-core-light-grey)', background: 'var(--color-core-white)', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', color: 'var(--color-core-dark-grey)' }}>Нет иконки</div>
                     )}

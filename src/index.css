@@ -96,6 +96,10 @@ html::-webkit-scrollbar-corner {
   --scroll-thumb-hover: var(--color-core-dark-grey);
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   font-family: var(--font-sans);
   color: var(--color-core-black);
