@@ -1,0 +1,231 @@
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { getCategory, getCategories } from '../api/categories'
+import { getProducts } from '../api/products'
+import ProductsCatalogSection from '../sections/ProductsCatalogSection'
+import Reveal from '../components/Reveal'
+import { usePageMeta } from '../hooks/usePageMeta'
+import { categorySlugPath, categoryUrl } from '../utils/categoryUrl'
+
+export default function CategoryPage({ categoryId, onCartOpen }) {
+  const { categorySlug } = useParams()
+  const navigate = useNavigate()
+  const [category, setCategory] = useState(null)
+  const [displayCategory, setDisplayCategory] = useState(null)
+  const [parentCategory, setParentCategory] = useState(null)
+  const [otherCategories, setOtherCategories] = useState([])
+  const [subcategories, setSubcategories] = useState([])
+  const [totalProducts, setTotalProducts] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [categoryId])
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError('')
+
+    getCategory(categoryId)
+      .then((data) => {
+        if (cancelled) return
+        if (!data.published) {
+          setError('Категория не найдена')
+          setCategory(null)
+          return
+        }
+        setCategory(data)
+        setDisplayCategory(data)
+
+        getCategories(true).then(cats => {
+          if (!cancelled) {
+            let parentId = data.parent_id || data.id
+            let parent = data.parent_id ? cats.find(c => c.id === data.parent_id) : data
+            let subs = cats.filter(c => c.parent_id === parentId)
+            
+            if (data.parent_id) {
+              if (parent) setDisplayCategory(parent)
+              setSubcategories(subs)
+              setParentCategory(parent || null)
+              setOtherCategories(cats.filter(c => c.id !== parent?.id && !c.parent_id))
+            } else {
+              setSubcategories(subs)
+              setParentCategory(null)
+              setOtherCategories(cats.filter(c => c.id !== data.id && !c.parent_id))
+            }
+
+            const allIds = [parentId, ...subs.map(s => s.id)].join(',')
+            getProducts({ categoryId: allIds })
+              .then(prods => {
+                if (!cancelled) setTotalProducts(prods.length)
+              })
+              .catch(() => {})
+          }
+        }).catch(() => {})
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCategory(null)
+          setError('Категория не найдена')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [categoryId])
+
+  useEffect(() => {
+    if (!category || !categorySlug) return
+    if (category.id !== categoryId) return
+    const expectedSlug = categorySlugPath(category)
+    if (categorySlug !== expectedSlug) {
+      navigate(categoryUrl(category), { replace: true })
+    }
+  }, [category, categorySlug, navigate])
+
+  usePageMeta({
+    enabled: !!category,
+    title: category?.name,
+    description: category?.description?.trim()
+      ? category.description.trim().slice(0, 160)
+      : `Категория ${category?.name || ''} — Eichholtz Казахстан`,
+    image: category?.image_url,
+    path: category ? categoryUrl(category) : undefined,
+  })
+
+  if (loading && !category) {
+    return <p className="collection-page__status">Загрузка...</p>
+  }
+
+  if (error || !category) {
+    return (
+      <div className="collection-page collection-page--empty">
+        <p className="collection-page__status">{error || 'Категория не найдена'}</p>
+        <button type="button" className="link-underline" onClick={() => navigate('/')}>
+          На главную
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="collection-page">
+      <Reveal className="collection-page__breadcrumb-wrap" variant="fade">
+        <nav className="product-page__breadcrumb collection-page__breadcrumb" aria-label="Навигация">
+          <Link to="/">Главная</Link>
+          <span aria-hidden="true">/</span>
+          <Link to="/catalog">Каталог</Link>
+          <span aria-hidden="true">/</span>
+          {parentCategory && (
+            <>
+              <Link to={categoryUrl(parentCategory)}>{parentCategory.name}</Link>
+              <span aria-hidden="true">/</span>
+            </>
+          )}
+          <span>{category.name}</span>
+        </nav>
+      </Reveal>
+
+      <Reveal className="collection-page__hero" variant="blur-up">
+        {displayCategory?.image_url && (
+          <div className="collection-page__hero-media">
+            <img
+              src={displayCategory.image_url}
+              alt=""
+              onError={(e) => {
+                const media = e.currentTarget.closest('.collection-page__hero-media')
+                if (media) media.hidden = true
+              }}
+            />
+          </div>
+        )}
+        <div className="collection-page__hero-content">
+          <h1 className="collection-page__title">{displayCategory?.name || category.name}</h1>
+          
+          <div className="collection-page__stats" style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', fontSize: '0.85rem', color: 'var(--color-core-dark-grey)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {subcategories.length > 0 && (
+              <span>Подкатегорий: {subcategories.length}</span>
+            )}
+            {totalProducts > 0 && (
+              <span>Товаров: {totalProducts}</span>
+            )}
+          </div>
+          <div className="section-heading section-heading--left collection-page__divider" />
+
+          {displayCategory?.description && (
+            <p className="collection-page__description">{displayCategory.description}</p>
+          )}
+        </div>
+      </Reveal>
+
+      {subcategories.length > 0 && (
+        <div className="collection-page__subcats">
+          <button
+            type="button"
+            className={`collection-page__subcat${!parentCategory ? ' is-active' : ''}`}
+            onClick={() => parentCategory ? navigate(categoryUrl(parentCategory)) : {}}
+          >
+            Все
+          </button>
+          {subcategories.map(sub => {
+            const isActive = sub.id === category.id;
+            return (
+              <button
+                key={sub.id}
+                type="button"
+                className={`collection-page__subcat${isActive ? ' is-active' : ''}`}
+                onClick={() => !isActive && navigate(categoryUrl(sub))}
+              >
+                {sub.name}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      <ProductsCatalogSection
+        categoryFilter={category.id}
+        collectionFilterName={category.name}
+        titleOverride={`Каталог: ${category.name}`}
+        hideFilterChip
+        sidebarNavigates
+        onCartOpen={onCartOpen}
+      />
+
+      {otherCategories.length > 0 && (
+        <section className="collection" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>
+          <h2 className="section-title" style={{ textAlign: 'center', marginBottom: '3rem', fontWeight: 400 }}>Другие категории</h2>
+          <Reveal as="div" className="category-grid reveal-stagger" variant="up" delay={120}>
+            {otherCategories.map((item, index) => (
+              <button
+                key={item.id}
+                type="button"
+                className="category-tile"
+                style={{ '--stagger': index }}
+                onClick={() => navigate(categoryUrl(item))}
+              >
+                <img
+                  src={item.image_url || '/logo.webp'}
+                  alt=""
+                  className={`category-tile__img ${!item.image_url ? 'img-fallback' : ''}`}
+                  onError={(e) => {
+                    e.currentTarget.onerror = null
+                    e.currentTarget.src = '/logo.webp'
+                    e.currentTarget.classList.add('img-fallback')
+                  }}
+                />
+                <span className="category-tile__name">{item.name}</span>
+              </button>
+            ))}
+          </Reveal>
+        </section>
+      )}
+    </div>
+  )
+}

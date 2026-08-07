@@ -1,0 +1,160 @@
+{
+  "color": {
+    "label": "Цвет",
+    "options": [
+      {
+        "value": "Beige",
+        "swatch": "#ffefc2"
+      },
+      {
+        "value": "Beige | Sand",
+        "swatch": "#dbc690"
+      },
+      {
+        "value": "Black",
+        "swatch": "#000000"
+      },
+      {
+        "value": "Blue",
+        "swatch": "#163480"
+      },
+      {
+        "value": "Bronze",
+        "swatch": "#382424"
+      },
+      {
+        "value": "Brown",
+        "swatch": "#6b4c03"
+      },
+      {
+        "value": "Clear",
+        "swatch": "#ffffff"
+      },
+      {
+        "value": "Copper",
+        "swatch": "#a64119"
+      },
+      {
+        "value": "Gold",
+        "swatch": "#c9a524"
+      },
+      {
+        "value": "Green",
+        "swatch": "#306115"
+      },
+      {
+        "value": "Greige",
+        "swatch": "#786757"
+      },
+      {
+        "value": "Grey",
+        "swatch": "#8c8c8c"
+      },
+      {
+        "value": "Natural",
+        "swatch": "#d4b082"
+      },
+      {
+        "value": "Off-white",
+        "swatch": "#f7f5ed"
+      },
+      {
+        "value": "Orange",
+        "swatch": "#d17a3d"
+      },
+      {
+        "value": "Pink",
+        "swatch": "#f095c1"
+      },
+      {
+        "value": "Purple",
+        "swatch": "#874a8c"
+      },
+      {
+        "value": "Red",
+        "swatch": "#c93c3c"
+      },
+      {
+        "value": "Sand",
+        "swatch": "#d4c699"
+      },
+      {
+        "value": "Silver",
+        "swatch": "#969696"
+      },
+      {
+        "value": "White",
+        "swatch": "#ffffff"
+      },
+      {
+        "value": "White | Off-white",
+        "swatch": "#f7f7e8"
+      },
+      {
+        "value": "Yellow",
+        "swatch": "#f5d536"
+      }
+    ]
+  },
+  "finish": {
+    "label": "Отделка",
+    "options": [
+      {
+        "value": "Antique gold",
+        "swatch": "https://cdn.eichholtz.com/media/attribute/swatch//a/n/antique_gold.jpg"
+      },
+      {
+        "value": "Antique silver",
+        "swatch": "https://cdn.eichholtz.com/media/attribute/swatch//a/n/antique_silver_2_lr.jpg"
+      },
+      {
+        "value": "Brass (antiqued)",
+        "swatch": "https://cdn.eichholtz.com/media/attribute/swatch//a/n/antique_brass.jpg"
+      },
+      {
+        "value": "Brass (brushed)",
+        "swatch": "https://cdn.eichholtz.com/media/attribute/swatch//b/r/brushed_brass.jpg"
+      },
+      {
+        "value": "Bronze",
+        "swatch": "https://cdn.eichholtz.com/media/attribute/swatch//b/r/bronze_1.jpg"
+      },
+      {
+        "value": "Bronze | Gunmetal",
+        "swatch": "https://cdn.eichholtz.com/media/attribute/swatch//b/r/bronze.jpg"
+      },
+      {
+        "value": "Charcoal",
+        "swatch": "https://cdn.eichholtz.com/media/attribute/swatch//c/h/charcoal.jpg"
+      },
+      {
+        "value": "Copper (brushed)",
+        "swatch": "https://cdn.eichholtz.com/media/attribute/swatch//b/r/brushed_copper.jpg"
+      },
+      {
+        "value": "Gunmetal",
+        "swatch": "https://cdn.eichholtz.com/media/attribute/swatch//g/u/gunmetal.jpg"
+      },
+      {
+        "value": "Mirror glass",
+        "swatch": "https://cdn.eichholtz.com/media/attribute/swatch//m/i/mirror_glass.jpg"
+      },
+      {
+        "value": "Steel (brushed)",
+        "swatch": "https://cdn.eichholtz.com/media/attribute/swatch//b/r/brushed_steel.jpg"
+      },
+      {
+        "value": "Weathered oak",
+        "swatch": "https://cdn.eichholtz.com/media/attribute/swatch//w/e/weathered_oak_68_.jpg"
+      }
+    ]
+  },
+  "fabric": {
+    "label": "Ткань",
+    "options": []
+  },
+  "material": {
+    "label": "Материал",
+    "options": []
+  }
+}

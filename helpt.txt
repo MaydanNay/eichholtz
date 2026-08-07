@@ -1,0 +1,33 @@
+docker compose down
+docker compose up --build -d
+docker compose logs -f
+
+
+
+
+# Импорт коллекций/новостей/картинок с eichholtz.kz (первый раз или заново)
+docker compose exec app node server/scripts/seed-from-site.js --force
+
+# Логи
+
+docker compose logs -f app
+docker compose logs -f db
+
+
+
+
+
+
+
+ssh dev2@94.131.93.142
+
+
+
+
+ssh root@89.35.124.219
+
+gX"_(%=>WqlV#CKW0
+
+
+rsync -av --exclude="node_modules" /home/maydan/projects/wa_monitoring root@89.35.124.219:/opt/
+

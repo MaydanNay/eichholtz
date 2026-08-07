@@ -1,0 +1,6 @@
+https://github.com/MaydanNay/eichholtz
+
+cd eicholtz
+git add .
+git commit -m ","
+git push origin main

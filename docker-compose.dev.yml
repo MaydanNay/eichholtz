@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:16-alpine
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-eicholtz}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eicholtz}
+      POSTGRES_DB: ${POSTGRES_DB:-eicholtz}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-eicholtz} -d ${POSTGRES_DB:-eicholtz}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

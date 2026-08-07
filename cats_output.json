@@ -1,0 +1,98 @@
+{
+  "New": {
+    "slug": "new",
+    "subcategories": {
+      "New Collection - January 2026": "new-collection-january-2026",
+      "New Arrivals": "new-arrivals",
+      "Corey Damen Jenkins": "corey-damen-jenkins",
+      "The Met x Eichholtz": "the-met-x-eichholtz",
+      "New arrivals": "new-arrivals"
+    }
+  },
+  "All Furniture": {
+    "slug": "furniture",
+    "subcategories": {
+      "Bedroom": "bedroom",
+      "All Bedroom": "bedroom",
+      "Cabinets": "cabinets",
+      "All Cabinets": "cabinets",
+      "Chairs": "chairs-2",
+      "All Chairs": "chairs-2",
+      "Rugs | Carpets": "rugs-carpets",
+      "Sofas | Ottomans": "sofas-ottomans",
+      "All Sofas | Ottomans": "sofas-ottomans",
+      "Tables": "tables",
+      "All Tables": "tables"
+    }
+  },
+  "All Lighting": {
+    "slug": "lighting",
+    "subcategories": {
+      "Chandeliers": "chandeliers",
+      "Ceiling lamps": "ceiling-lamps",
+      "Table lamps": "table-lamps",
+      "Floor lamps": "floor-lamps",
+      "Wall lamps": "wall-lamps",
+      "Outdoor lighting": "outdoor-lighting",
+      "LED bulbs": "led-bulbs",
+      "Lamp shades": "lamp-shades"
+    }
+  },
+  "All Accessories": {
+    "slug": "accessories",
+    "subcategories": {
+      "Mirrors": "mirrors",
+      "All Mirrors": "mirrors",
+      "Wall decorations": "wall-decorations",
+      "All Wall decorations": "wall-decorations",
+      "Decorative items": "decorative-items",
+      "All Decorative items": "decorative-items",
+      "Hurricanes | Candle holders": "hurricanes-candle-holders",
+      "All Hurricanes | Candle holders": "hurricanes-candle-holders",
+      "Artificial Flowers & Greenery": "artificial-flowers-and-greenery",
+      "Vases | Planters": "vases-planters",
+      "All Vases | Planters": "vases-planters",
+      "Serving accessories": "serving-accessories",
+      "All Serving accessories": "serving-accessories",
+      "Home textiles": "home-textiles",
+      "All Home textiles": "home-textiles",
+      "Coat racks | Umbrella stands & more": "coat-racks-umbrella-stands",
+      "All Coat racks | Umbrella stands & more": "coat-racks-umbrella-stands"
+    }
+  },
+  "All Outdoor": {
+    "slug": "outdoor",
+    "subcategories": {
+      "Outdoor sofas | Daybeds": "outdoor-sofas-daybeds",
+      "All Outdoor sofas | Daybeds": "outdoor-sofas-daybeds",
+      "Outdoor chairs": "outdoor-chairs",
+      "All Outdoor chairs": "outdoor-chairs",
+      "Outdoor tables": "outdoor-tables",
+      "All Outdoor tables": "outdoor-tables",
+      "Outdoor carpets": "outdoor-carpets",
+      "Outdoor accessories": "outdoor-accessories",
+      "Outdoor lighting": "outdoor-lighting",
+      "Outdoor covers": "outdoor-covers"
+    }
+  },
+  "Furniture": {
+    "slug": "furniture",
+    "subcategories": {}
+  },
+  "Lighting": {
+    "slug": "lighting",
+    "subcategories": {}
+  },
+  "Accessories": {
+    "slug": "accessories",
+    "subcategories": {}
+  },
+  "Outdoor": {
+    "slug": "outdoor",
+    "subcategories": {}
+  },
+  "Home accessories": {
+    "slug": "accessories",
+    "subcategories": {}
+  }
+}
