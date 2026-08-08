@@ -121,6 +121,7 @@ export default function Header({
   const [searchResults, setSearchResults] = useState([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [openMegaMenu, setOpenMegaMenu] = useState(null)
+  const [navDim, setNavDim] = useState(false)
   const { isAuthenticated } = useAuth()
   const { count: favoritesCount } = useFavorites()
   const { count: cartCount } = useCart()
@@ -163,6 +164,7 @@ export default function Header({
 
   useEffect(() => {
     setOpenMegaMenu(null)
+    setNavDim(false)
     setIsMobileMenuOpen(false)
   }, [location.pathname])
 
@@ -315,11 +317,13 @@ export default function Header({
   }
 
   const openMegaMenuPanel = (menu) => {
+    setNavDim(true)
     setOpenMegaMenu(menu)
   }
 
   const closeMegaMenu = () => {
     setOpenMegaMenu(null)
+    setNavDim(false)
   }
 
   const isCollectionsOpen = openMegaMenu === 'collections'
@@ -336,12 +340,18 @@ export default function Header({
   }
 
   const showSearchDropdown = isSearchOpen && searchQuery.trim().length >= 2
+  const showPageDim = Boolean(openMegaMenu) || navDim
 
   return (
     <>
+      <div
+        className={`header-page-dim${showPageDim ? ' header-page-dim--visible' : ''}`}
+        aria-hidden="true"
+        onClick={closeMegaMenu}
+      />
       <header
         ref={headerRef}
-        className={`header${scrolled ? ' header--scrolled' : ''}${openMegaMenu ? ' header--collections-open' : ''}${isHidden ? ' header--hidden' : ''}`}
+        className={`header${scrolled ? ' header--scrolled' : ''}${openMegaMenu ? ' header--collections-open' : ''}${isHidden ? ' header--hidden' : ''}${showPageDim ? ' header--nav-dim' : ''}`}
         onMouseLeave={closeMegaMenu}
       >
       <div className="header__top">
@@ -540,7 +550,10 @@ export default function Header({
                   closeMegaMenu()
                   onNavigate(item.id)
                 }}
-                onMouseEnter={closeMegaMenu}
+                onMouseEnter={() => {
+                  setOpenMegaMenu(null)
+                  setNavDim(true)
+                }}
               >
                 {item.label}
               </button>

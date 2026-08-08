@@ -12,6 +12,8 @@ import { collectionUrl } from '../utils/collectionUrl'
 import { productUrl } from '../utils/productUrl'
 import { openInquiryWhatsApp } from '../utils/inquiryWhatsApp'
 import { useProductGalleryImages } from '../utils/useProductGalleryImages'
+import { formatSpecDisplayValue, getSpecLabel } from '../utils/specLabels'
+import { parseDimensionUnits } from '../utils/parseDimensions'
 
 function formatPrice(value) {
   const amount = Number(value) || 0
@@ -30,26 +32,17 @@ function normalizeSpecs(specs) {
   }
   if (!value || typeof value !== 'object') return []
 
-  const labelMap = {
-    sku: 'Артикул',
-    color: 'Цвет',
-    material: 'Материал',
-    finish: 'Отделка',
-    fabric: 'Ткань',
-    shape: 'Форма',
-    product_group: 'Группа товаров',
-    dimensions: 'Габариты',
-    height: 'Высота',
-    width: 'Ширина',
-    depth: 'Глубина',
-    diameter: 'Диаметр',
-    weight: 'Вес',
-    assembly: 'Сборка',
-    indoor_outdoor: 'Применение',
-    country_of_origin: 'Страна производства'
-  }
-
   const entries = []
+  const hidden = new Set([
+    'extra_collections',
+    'extra_categories',
+    'objectID',
+    'objectid',
+    'specifications',
+    'care_instructions',
+    'dimensions',
+    'also_available_skus',
+  ])
 
   if (value.specifications && typeof value.specifications === 'object') {
     for (const [k, v] of Object.entries(value.specifications)) {
@@ -58,9 +51,10 @@ function normalizeSpecs(specs) {
   }
 
   for (const [k, v] of Object.entries(value)) {
-    if (!v || ['extra_collections', 'extra_categories', 'objectID', 'specifications', 'care_instructions', 'dimensions'].includes(k)) continue
-    const label = labelMap[k.toLowerCase()] || k
-    const displayVal = Array.isArray(v) ? v.join(', ') : String(v)
+    if (!v || hidden.has(k) || hidden.has(k.toLowerCase())) continue
+    const label = getSpecLabel(k)
+    const displayVal = formatSpecDisplayValue(v)
+    if (!displayVal) continue
     if (!entries.some(([key]) => key.toLowerCase() === k.toLowerCase())) {
       entries.push([k, label, displayVal])
     }
@@ -79,6 +73,12 @@ export default function ProductPage({ productId, onCartOpen, onCheckout }) {
   const [buying, setBuying] = useState(false)
   const [activeImage, setActiveImage] = useState(0)
   const [activeTab, setActiveTab] = useState('description')
+  const [dimUnit, setDimUnit] = useState('cm')
+
+  const dimensionUnits = useMemo(
+    () => parseDimensionUnits(product?.specs?.dimensions),
+    [product?.specs?.dimensions],
+  )
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -95,6 +95,7 @@ export default function ProductPage({ productId, onCartOpen, onCheckout }) {
         if (cancelled) return
         setProduct(data)
         setActiveTab('description')
+        setDimUnit('cm')
         if (data.collection_id) {
           const items = await getProducts({ collectionId: data.collection_id }).catch(() => [])
           if (!cancelled) {
@@ -398,7 +399,7 @@ export default function ProductPage({ productId, onCartOpen, onCheckout }) {
                     <p>
                       {product.in_stock === false
                         ? 'Товар доступен под заказ. Сроки и условия поставки уточняет менеджер.'
-                        : 'Товар доступен к заказу. Доставка и сборка обсуждаются индивидуально.'}
+                        : 'Доставка и сборка обсуждаются индивидуально.'}
                     </p>
                     {product.collection_name && (
                       <p>Коллекция: {product.collection_name}</p>
@@ -411,8 +412,36 @@ export default function ProductPage({ productId, onCartOpen, onCheckout }) {
               )}
 
               {activeTab === 'dimensions' && (
-                <div className="product-page__description">
-                  <p style={{ whiteSpace: 'pre-line', lineHeight: '1.6' }}>{product.specs.dimensions}</p>
+                <div className="product-page__dimensions">
+                  {dimensionUnits.hasBoth && (
+                    <div className="product-page__dim-switch" role="group" aria-label="Единицы размера">
+                      <button
+                        type="button"
+                        className={`product-page__dim-unit${dimUnit === 'cm' ? ' product-page__dim-unit--active' : ''}`}
+                        onClick={() => setDimUnit('cm')}
+                      >
+                        cm
+                      </button>
+                      <span className="product-page__dim-sep" aria-hidden="true">
+                        |
+                      </span>
+                      <button
+                        type="button"
+                        className={`product-page__dim-unit${dimUnit === 'inch' ? ' product-page__dim-unit--active' : ''}`}
+                        onClick={() => setDimUnit('inch')}
+                      >
+                        inch
+                      </button>
+                    </div>
+                  )}
+                  <div className="product-page__dim-box">
+                    {dimUnit === 'inch' && dimensionUnits.inch
+                      ? dimensionUnits.inch
+                      : dimensionUnits.cm || String(product.specs.dimensions).replace(/\s+/g, ' ').trim()}
+                  </div>
+                  <p className="product-page__dim-note">
+                    Все указанные размеры приблизительны и могут отличаться до 2%.
+                  </p>
                 </div>
               )}
 

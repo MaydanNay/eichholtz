@@ -10,6 +10,7 @@ import AddToCartButton from '../components/AddToCartButton'
 import Reveal from '../components/Reveal'
 import { productUrl } from '../utils/productUrl'
 import ProductCard from '../components/ProductCard'
+import { SPEC_LABELS, translateSpecValue, getSpecLabel } from '../utils/specLabels'
 
 const PAGE_SIZE = 12
 
@@ -35,116 +36,6 @@ const EXCLUDED_SPECS = [
   'extra_categories',
   'specifications',
 ]
-
-const SPEC_LABELS = {
-  'fabric': 'Ткань',
-  'finish': 'Отделка',
-  'material': 'Материал',
-  'shape': 'Форма',
-  'color': 'Цвет',
-  'style': 'Стиль',
-  'length': 'Длина',
-  'variations': 'Вариации',
-  'variation': 'Вариация',
-  'width': 'Ширина',
-  'depth': 'Глубина',
-  'height': 'Высота',
-  'weight': 'Вес',
-  'volume': 'Объем',
-  'product_group': 'Группа товаров',
-}
-
-const VALUE_LABELS = {
-  'Armchairs': 'Кресла',
-  'Artificial flowers and greenery': 'Искусственные цветы и зелень',
-  'Ashtrays': 'Пепельницы',
-  'Bars': 'Барные стойки',
-  'Barstools': 'Барные стулья',
-  'Bathroom accessories': 'Аксессуары для ванной',
-  'Benches': 'Скамейки',
-  'Bookends': 'Подставки для книг',
-  'Bowls': 'Боулз',
-  'Boxes': 'Коробки',
-  'Buddhas/Ethnics/Bronzes': 'Статуэтки и этника',
-  'Candle holders': 'Подсвечники',
-  'Candles': 'Свечи',
-  'Carpets': 'Ковры',
-  'Ceiling lamps': 'Потолочные светильники',
-  'Chaises longues': 'Шезлонги',
-  'Chandeliers': 'Люстры',
-  'Coatracks': 'Вешалки для одежды',
-  'Coffee tables': 'Кофейные столики',
-  'Columns': 'Колонки',
-  'Console tables': 'Консольные столы',
-  'Deco accessories': 'Декоративные предметы',
-  'Desk lamps': 'Настольные лампы',
-  'Desks': 'Письменные столы',
-  'Dining chairs': 'Обеденные стулья',
-  'Dining tables': 'Обеденные столы',
-  'Display cabinets': 'Витрины',
-  'Drawer': 'Комоды с ящиками',
-  'Dresser': 'Комоды',
-  'Fireplace accessories': 'Аксессуары для камина',
-  'Floor lamps': 'Торшеры',
-  'Folding screens': 'Ширмы',
-  'Headboards': 'Изголовья и кровати',
-  'Hurricanes': 'Ураганы',
-  'Light bulbs': 'LED лампы',
-  'Nightstands': 'Прикроватные тумбочки',
-  'Ottomans': 'Османы',
-  'Outdoor accessories': 'Аксессуары для улицы',
-  'Outdoor beds': 'Уличные кровати',
-  'Outdoor carpets': 'Ковры для улицы',
-  'Outdoor chairs': 'Кресла для улицы',
-  'Outdoor coffee tables': 'Кофейные столики на открытом воздухе',
-  'Outdoor console Tables': 'Уличные консольные столики',
-  'Outdoor dining chairs': 'Обеденные стулья для улицы',
-  'Outdoor dining tables': 'Столы для обеда на открытом воздухе',
-  'Outdoor side tables': 'Уличные приставные столики',
-  'Outdoor sofas': 'Уличные диваны',
-  'Outdoor table lamps': 'Настольные лампы для улицы',
-  'Outdoor wall lamps': 'Настенное уличное освещение',
-  'Picture Frames': 'Рамки для картин',
-  'Pillows': 'Подушки',
-  'Planters': 'Плантаторы / Кашпо',
-  'Prints': 'Картины / Принты',
-  'Serving accessories': 'Аксессуары для сервировки',
-  'Shades': 'Абажуры',
-  'Shelving': 'Стеллажи',
-  'Side tables': 'Приставные столики',
-  'Sofas': 'Диваны',
-  'Stools': 'Стулья',
-  'Table & Floor mirrors': 'Настольные и напольные зеркала',
-  'Table lamps': 'Настольные лампы',
-  'Trolleys': 'Тележки',
-  'TV Cabinets': 'Тумбы под телевизор',
-  'Umbrella stands': 'Подставки для зонтов',
-  'Vases': 'Вазы',
-  'Wall accessories': 'Настенные объекты',
-  'Wall lamps': 'Бра',
-  'Wall mirrors': 'Настенные зеркала',
-  'Wardrobe cabinets': 'Шкафы для одежды',
-  'Wine cabinets': 'Барные шкафы',
-  'Wine coolers': 'Охладители для вина',
-  'Wine racks': 'Винные стеллажи',
-}
-
-function translateSpecValue(val) {
-  if (!val) return ''
-  const str = String(val).trim()
-  if (VALUE_LABELS[str]) return VALUE_LABELS[str]
-  const lower = str.toLowerCase()
-  for (const [k, v] of Object.entries(VALUE_LABELS)) {
-    if (k.toLowerCase() === lower) return v
-  }
-  return str
-}
-
-function getSpecLabel(key) {
-  const lower = key.toLowerCase()
-  if (SPEC_LABELS[lower]) return SPEC_LABELS[lower]
-  return key.charAt(0).toUpperCase() + key.slice(1)
-}
 
 export default function ProductsCatalogSection({
   collectionFilter,
