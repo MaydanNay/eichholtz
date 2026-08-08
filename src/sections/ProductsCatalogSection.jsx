@@ -310,6 +310,32 @@ export default function ProductsCatalogSection({
   const totalPages = Math.ceil(totalProducts / PAGE_SIZE)
   const shown = products
   const hasSearch = !!searchQuery?.trim()
+  const rangeFrom = totalProducts === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
+  const rangeTo = Math.min(currentPage * PAGE_SIZE, totalProducts)
+  const countLabel =
+    totalProducts === 0
+      ? '0 товаров'
+      : `Товары ${rangeFrom}–${rangeTo} из ${totalProducts.toLocaleString('ru-RU')}`
+
+  const renderSortSelect = () => (
+    <div className="products-catalog__sort">
+      <CustomSelect
+        value={sortValue}
+        options={SORT_OPTIONS}
+        onChange={(value) => {
+          setSortValue(value)
+          setCurrentPage(1)
+        }}
+      />
+    </div>
+  )
+
+  const renderToolbar = () => (
+    <div className="products-catalog__toolbar">
+      <p className="products-catalog__count">{loading ? 'Загрузка...' : countLabel}</p>
+      {renderSortSelect()}
+    </div>
+  )
 
   const renderPagination = () => {
     if (totalPages <= 1) return null
@@ -425,14 +451,6 @@ export default function ProductsCatalogSection({
                     </button>
                   </div>
                 )}
-                <CustomSelect
-                value={sortValue}
-                options={SORT_OPTIONS}
-                onChange={(value) => {
-                  setSortValue(value)
-                  setCurrentPage(1)
-                }}
-              />
               <div className="products-catalog__sidebar-specs" style={{ marginTop: 0 }}>
                 <div className="products-catalog__spec-group">
                   <button
@@ -566,20 +584,7 @@ export default function ProductsCatalogSection({
           )}
 
           <div className="products-catalog__main" style={hideSidebar ? { paddingLeft: 0, marginTop: '2rem' } : undefined}>
-            {hideSidebar && (
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '2rem' }}>
-                <div style={{ width: '220px' }}>
-                  <CustomSelect
-                    value={sortValue}
-                    options={SORT_OPTIONS}
-                    onChange={(value) => {
-                      setSortValue(value)
-                      setCurrentPage(1)
-                    }}
-                  />
-                </div>
-              </div>
-            )}
+            {renderToolbar()}
             {loading ? (
               <p className="products-catalog__empty">Загрузка...</p>
             ) : shown.length === 0 ? (

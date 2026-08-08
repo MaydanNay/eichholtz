@@ -30,7 +30,7 @@ const EMPTY = {
   fabric: '',
 }
 
-function specsFromProduct(product) {
+function productSpecs(product) {
   let specs = product?.specs
   if (typeof specs === 'string') {
     try {
@@ -39,7 +39,17 @@ function specsFromProduct(product) {
       specs = {}
     }
   }
-  if (!specs || typeof specs !== 'object') specs = {}
+  if (!specs || typeof specs !== 'object') return {}
+  return specs
+}
+
+function productSku(product) {
+  const specs = productSpecs(product)
+  return String(specs.sku || '').trim()
+}
+
+function specsFromProduct(product) {
+  const specs = productSpecs(product)
   return {
     variation: specs.variation || '',
     height: specs.height || '',
@@ -78,6 +88,90 @@ function buildPayload(form) {
   }
 }
 
+const SORT_OPTIONS = [
+  { value: 'id_desc', label: 'Сначала новые (ID ↓)' },
+  { value: 'id_asc', label: 'Сначала старые (ID ↑)' },
+  { value: 'price_asc', label: 'Цена: с 0 / по возрастанию' },
+  { value: 'price_desc', label: 'Цена: по убыванию' },
+  { value: 'name_asc', label: 'Название: А—Я' },
+  { value: 'name_desc', label: 'Название: Я—А' },
+]
+
+function productPrice(product) {
+  const n = Number(product?.price)
+  return Number.isFinite(n) ? n : 0
+}
+
+function productExtraCollections(product) {
+  const raw = productSpecs(product).extra_collections
+  if (Array.isArray(raw)) return raw.map((v) => String(v))
+  if (raw == null || raw === '') return []
+  return [String(raw)]
+}
+
+function categorySubtreeIds(categories, rootId) {
+  const root = Number(rootId)
+  if (!Number.isFinite(root)) return new Set()
+  const byParent = new Map()
+  for (const cat of categories) {
+    const parent = cat.parent_id == null ? null : Number(cat.parent_id)
+    if (!byParent.has(parent)) byParent.set(parent, [])
+    byParent.get(parent).push(Number(cat.id))
+  }
+  const ids = new Set([root])
+  const stack = [root]
+  while (stack.length) {
+    const current = stack.pop()
+    for (const child of byParent.get(current) || []) {
+      if (!ids.has(child)) {
+        ids.add(child)
+        stack.push(child)
+      }
+    }
+  }
+  return ids
+}
+
+function matchesCategoryFilter(product, filterCategoryId, categories) {
+  if (!filterCategoryId) return true
+  if (filterCategoryId === 'none') return !product.category_id
+  const allowed = categorySubtreeIds(categories, filterCategoryId)
+  return allowed.has(Number(product.category_id))
+}
+
+function matchesCollectionFilter(product, filterCollectionId, collections) {
+  if (!filterCollectionId) return true
+  if (filterCollectionId === 'none') return !product.collection_id
+  if (String(product.collection_id) === String(filterCollectionId)) return true
+  const coll = collections.find((c) => String(c.id) === String(filterCollectionId))
+  if (!coll) return false
+  const extras = productExtraCollections(product)
+  return extras.includes(String(coll.name)) || extras.includes(String(coll.id))
+}
+
+function sortProducts(list, sortValue) {
+  const sorted = [...list]
+  sorted.sort((a, b) => {
+    if (sortValue === 'price_asc') {
+      const d = productPrice(a) - productPrice(b)
+      return d !== 0 ? d : b.id - a.id
+    }
+    if (sortValue === 'price_desc') {
+      const d = productPrice(b) - productPrice(a)
+      return d !== 0 ? d : b.id - a.id
+    }
+    if (sortValue === 'name_asc') {
+      return String(a.name || '').localeCompare(String(b.name || ''), 'ru') || b.id - a.id
+    }
+    if (sortValue === 'name_desc') {
+      return String(b.name || '').localeCompare(String(a.name || ''), 'ru') || b.id - a.id
+    }
+    if (sortValue === 'id_asc') return a.id - b.id
+    return b.id - a.id
+  })
+  return sorted
+}
+
 export default function ProductsPage() {
   const { query } = useAdminSearch()
   const [products, setProducts] = useState([])
@@ -90,6 +184,14 @@ export default function ProductsPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [productAttributes, setProductAttributes] = useState({})
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [sortValue, setSortValue] = useState('id_desc')
+  const [filterCategoryId, setFilterCategoryId] = useState('')
+  const [filterCollectionId, setFilterCollectionId] = useState('')
+  const [filterCatalogId, setFilterCatalogId] = useState('')
+  const [filterPublished, setFilterPublished] = useState('all')
+  const [filterStock, setFilterStock] = useState('all')
+  const [filterPrice, setFilterPrice] = useState('all')
   const galleryUpload = useAdminGalleryUpload()
 
   const load = async () => {
@@ -122,21 +224,101 @@ export default function ProductsPage() {
 
   useEffect(() => { load() }, [])
 
-  const filteredProducts = useMemo(
-    () => products.filter((product) =>
-      matchesAdminSearch(
+  const sortedCategories = useMemo(
+    () => [...categories].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ru')),
+    [categories],
+  )
+
+  const sortedCollections = useMemo(
+    () => [...collections].sort((a, b) => {
+      const sa = `${a.season_name || ''} ${a.name || ''}`
+      const sb = `${b.season_name || ''} ${b.name || ''}`
+      return sa.localeCompare(sb, 'ru')
+    }),
+    [collections],
+  )
+
+  const sortedCatalogs = useMemo(
+    () => [...catalogs].sort((a, b) => {
+      const sa = `${a.season_name || ''} ${a.name || ''}`
+      const sb = `${b.season_name || ''} ${b.name || ''}`
+      return sa.localeCompare(sb, 'ru')
+    }),
+    [catalogs],
+  )
+
+  const activeFilterCount = [
+    filterCategoryId,
+    filterCollectionId,
+    filterCatalogId,
+    filterPublished !== 'all' ? filterPublished : '',
+    filterStock !== 'all' ? filterStock : '',
+    filterPrice !== 'all' ? filterPrice : '',
+  ].filter(Boolean).length
+
+  const hasActiveFilters = activeFilterCount > 0 || sortValue !== 'id_desc'
+
+  const resetFilters = () => {
+    setSortValue('id_desc')
+    setFilterCategoryId('')
+    setFilterCollectionId('')
+    setFilterCatalogId('')
+    setFilterPublished('all')
+    setFilterStock('all')
+    setFilterPrice('all')
+  }
+
+  const filteredProducts = useMemo(() => {
+    const filtered = products.filter((product) => {
+      if (!matchesAdminSearch(
         query,
         product.id,
+        productSku(product),
         product.name,
         product.category,
         product.category_name,
         product.collection_name,
         product.catalog_name,
         product.description,
-      ),
-    ),
-    [products, query],
-  )
+      )) return false
+
+      if (!matchesCategoryFilter(product, filterCategoryId, categories)) return false
+      if (!matchesCollectionFilter(product, filterCollectionId, collections)) return false
+
+      if (filterCatalogId) {
+        if (filterCatalogId === 'none') {
+          if (product.catalog_id) return false
+        } else if (String(product.catalog_id) !== String(filterCatalogId)) {
+          return false
+        }
+      }
+
+      if (filterPublished === 'yes' && !product.published) return false
+      if (filterPublished === 'no' && !!product.published) return false
+
+      if (filterStock === 'yes' && !product.in_stock) return false
+      if (filterStock === 'no' && !!product.in_stock) return false
+
+      if (filterPrice === 'zero' && productPrice(product) !== 0) return false
+      if (filterPrice === 'nonzero' && productPrice(product) === 0) return false
+
+      return true
+    })
+
+    return sortProducts(filtered, sortValue)
+  }, [
+    products,
+    categories,
+    collections,
+    query,
+    sortValue,
+    filterCategoryId,
+    filterCollectionId,
+    filterCatalogId,
+    filterPublished,
+    filterStock,
+    filterPrice,
+  ])
 
   const openCreate = () => {
     setForm(EMPTY)
@@ -220,12 +402,96 @@ export default function ProductsPage() {
   return (
     <div className="admin-page">
       <AdminPageHeader title={`Товары (${filteredProducts.length.toLocaleString('ru-RU')} товаров)`}>
+        <button
+          type="button"
+          className={`admin-btn${filtersOpen || hasActiveFilters ? ' admin-btn--primary' : ''}`}
+          onClick={() => setFiltersOpen((open) => !open)}
+          aria-expanded={filtersOpen}
+        >
+          Фильтры{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+        </button>
         <button type="button" className="admin-btn admin-btn--primary" onClick={openCreate}>
           + Добавить товар
         </button>
       </AdminPageHeader>
 
       {error && <p className="admin-error">{error}</p>}
+
+      {filtersOpen && (
+        <div className="admin-filters">
+          <label className="admin-filters__field">
+            <span>Сортировка</span>
+            <select value={sortValue} onChange={(e) => setSortValue(e.target.value)}>
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="admin-filters__field">
+            <span>Категория</span>
+            <select value={filterCategoryId} onChange={(e) => setFilterCategoryId(e.target.value)}>
+              <option value="">Все категории</option>
+              <option value="none">Без категории</option>
+              {sortedCategories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="admin-filters__field">
+            <span>Коллекция</span>
+            <select value={filterCollectionId} onChange={(e) => setFilterCollectionId(e.target.value)}>
+              <option value="">Все коллекции</option>
+              <option value="none">Без коллекции</option>
+              {sortedCollections.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.season_name ? `${c.season_name} — ` : ''}{c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="admin-filters__field">
+            <span>Каталог</span>
+            <select value={filterCatalogId} onChange={(e) => setFilterCatalogId(e.target.value)}>
+              <option value="">Все каталоги</option>
+              <option value="none">Без каталога</option>
+              {sortedCatalogs.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.season_name ? `${c.season_name} — ` : ''}{c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="admin-filters__field">
+            <span>Статус</span>
+            <select value={filterPublished} onChange={(e) => setFilterPublished(e.target.value)}>
+              <option value="all">Все</option>
+              <option value="yes">Опубликован</option>
+              <option value="no">Не опубликован</option>
+            </select>
+          </label>
+          <label className="admin-filters__field">
+            <span>В наличии</span>
+            <select value={filterStock} onChange={(e) => setFilterStock(e.target.value)}>
+              <option value="all">Все</option>
+              <option value="yes">Да</option>
+              <option value="no">Нет</option>
+            </select>
+          </label>
+          <label className="admin-filters__field">
+            <span>Цена</span>
+            <select value={filterPrice} onChange={(e) => setFilterPrice(e.target.value)}>
+              <option value="all">Любая</option>
+              <option value="zero">Только 0</option>
+              <option value="nonzero">Только с ценой</option>
+            </select>
+          </label>
+          {hasActiveFilters && (
+            <button type="button" className="admin-btn admin-filters__reset" onClick={resetFilters}>
+              Сбросить
+            </button>
+          )}
+        </div>
+      )}
 
       {showForm && (
         <form className="admin-form" onSubmit={handleSubmit}>
@@ -368,13 +634,14 @@ export default function ProductsPage() {
       {loading ? (
         <p className="admin-muted">Загрузка...</p>
       ) : filteredProducts.length === 0 ? (
-        <p className="admin-muted">{query ? 'Ничего не найдено' : 'Товаров пока нет'}</p>
+        <p className="admin-muted">{query || hasActiveFilters ? 'Ничего не найдено' : 'Товаров пока нет'}</p>
       ) : (
         <table className="admin-table">
           <thead>
             <tr>
               <th>№</th>
               <th>ID</th>
+              <th>SKU</th>
               <th>Название</th>
               <th>Категория</th>
               <th>Коллекция</th>
@@ -390,6 +657,7 @@ export default function ProductsPage() {
               <tr key={p.id}>
                 <td className="admin-table__num">{index + 1}</td>
                 <td>{p.id}</td>
+                <td>{productSku(p) || '—'}</td>
                 <td>{p.name}</td>
                 <td>{p.category_name || '—'}</td>
                 <td>{p.collection_name || '—'}</td>

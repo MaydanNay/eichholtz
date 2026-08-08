@@ -3569,10 +3569,44 @@
   -ms-overflow-style: none;
 }
 
+.products-catalog__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  text-align: left;
+}
+
+.products-catalog__count {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--color-core-dark-grey);
+  line-height: 1.4;
+}
+
+.products-catalog__sort {
+  flex: 0 0 auto;
+  width: min(220px, 48vw);
+}
+
 .products-catalog__main::-webkit-scrollbar {
   display: none;
   width: 0;
   height: 0;
+}
+
+@media (max-width: 640px) {
+  .products-catalog__toolbar {
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+
+  .products-catalog__sort {
+    width: 100%;
+  }
 }
 
 /* ── Custom Select ── */

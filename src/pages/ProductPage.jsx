@@ -289,18 +289,6 @@ export default function ProductPage({ productId, onCartOpen, onCheckout }) {
 
           <h1 className="product-page__title">{product.name}</h1>
 
-          {product.specs?.sku && (
-            <p className="product-page__category-subtitle" style={{ fontSize: '0.85rem', color: 'var(--color-core-dark-grey)', marginBottom: '0.5rem' }}>
-              Item no: {product.specs.sku}
-            </p>
-          )}
-
-          {product.category && (
-            <p className="product-page__category-subtitle">
-              Категория: {product.category}
-            </p>
-          )}
-
           <div className="product-page__price-row">
             {price ? (
               <p className="product-page__price">{price}</p>
