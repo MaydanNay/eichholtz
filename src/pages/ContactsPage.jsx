@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import Reveal from '../components/Reveal'
-import { SHOWROOMS, SHOWROOM_ORDER } from '../data/contacts'
+import { SHOWROOMS, SHOWROOM_ORDER, toTelHref, toWhatsAppNumber } from '../data/contacts'
 import { SITE_IMAGES } from '../data/siteImages'
 import { api } from '../admin/api'
 import { useContacts } from '../hooks/useContacts'
@@ -24,7 +24,9 @@ function ShowroomMap({ map }) {
 }
 
 export default function ContactsPage() {
-  const { contacts, loading } = useContacts()
+  const { contacts } = useContacts()
+  const waDisplay = contacts.whatsapp || contacts.astanaPhone
+  const waDigits = toWhatsAppNumber(waDisplay)
   const [form, setForm] = useState({ name: '', phone: '', message: '' })
   const [error, setError] = useState('')
   const [sent, setSent] = useState(false)
@@ -42,7 +44,6 @@ export default function ContactsPage() {
     if (phone.replace(/\D/g, '').length < 10) {
       return setError('Пожалуйста, введите корректный номер телефона')
     }
-    if (!message) return setError('Пожалуйста, введите ваш запрос')
 
     setSubmitting(true)
     try {
@@ -80,15 +81,15 @@ export default function ContactsPage() {
           <div className="contacts__info">
             <div className="contacts__row">
               <span className="contacts__label">Позвонить:</span>
-              <a href={`tel:${contacts.astanaPhone?.replace(/[^+\d]/g, '')}`}>{contacts.astanaPhone}</a>
+              <a href={`tel:${toTelHref(contacts.astanaPhone)}`}>{contacts.astanaPhone}</a>
             </div>
             <div className="contacts__row">
               <span className="contacts__label">Написать:</span>
               <div className="contacts__write">
                 <p>
                   WhatsApp:{' '}
-                  <a href={`https://wa.me/${contacts.astanaPhone?.replace(/[^\d]/g, '')}`} target="_blank" rel="noreferrer">
-                    {contacts.astanaPhone}
+                  <a href={`https://wa.me/${waDigits}`} target="_blank" rel="noreferrer">
+                    {waDisplay}
                   </a>
                 </p>
                 {contacts.emailGeneral && (
@@ -136,16 +137,16 @@ export default function ContactsPage() {
                 <p className="showroom-card__phone">
                   Позвонить:{' '}
                   {key === 'astana' && contacts.astanaPhone ? (
-                    <a href={`tel:${contacts.astanaPhone.replace(/[^+\d]/g, '')}`}>{contacts.astanaPhone}</a>
+                    <a href={`tel:${toTelHref(contacts.astanaPhone)}`}>{contacts.astanaPhone}</a>
                   ) : key === 'almaty' && contacts.almatyPhone ? (
-                    <a href={`tel:${contacts.almatyPhone.replace(/[^+\d]/g, '')}`}>{contacts.almatyPhone}</a>
+                    <a href={`tel:${toTelHref(contacts.almatyPhone)}`}>{contacts.almatyPhone}</a>
                   ) : (
                     <span>Номера не добавлены</span>
                   )}
                 </p>
                 <p className="showroom-card__wa">
                   WhatsApp:{' '}
-                  <a href={`https://wa.me/${(key === 'astana' ? contacts.astanaPhone : (contacts.almatyPhone || contacts.astanaPhone))?.replace(/[^\d]/g, '')}`} target="_blank" rel="noreferrer">
+                  <a href={`https://wa.me/${waDigits}`} target="_blank" rel="noreferrer">
                     Написать
                   </a>
                 </p>
@@ -195,14 +196,13 @@ export default function ContactsPage() {
             </label>
 
             <label className="contacts-page__field contacts-page__field--full">
-              <span>Ваш запрос *</span>
+              <span>Комментарий</span>
               <textarea
                 name="message"
                 rows={5}
-                placeholder="Введите ваш запрос"
+                placeholder="Введите комментарий"
                 value={form.message}
                 onChange={(e) => setForm({ ...form, message: e.target.value })}
-                required
               />
             </label>
 

@@ -95,9 +95,21 @@ router.post('/settings', requireAdmin, async (req, res) => {
 
   try {
     for (const [key, value] of Object.entries(settings)) {
+      let stored
+      if (typeof value === 'string') {
+        stored = value
+      } else if (value == null) {
+        stored = ''
+      } else {
+        stored = JSON.stringify(value)
+      }
+      // Guard against accidental Object stringification
+      if (stored.includes('[object Object]')) {
+        return res.status(400).json({ error: `Некорректное значение настройки: ${key}` })
+      }
       await query(
         'INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value',
-        [key, String(value)]
+        [key, stored]
       )
     }
     res.json({ success: true })

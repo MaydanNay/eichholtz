@@ -760,3 +760,27 @@ html.admin-mode body {
 .admin-table-row--hoverable:hover td {
   background-color: var(--color-ui-bg-light) !important;
 }
+
+.admin-hero-slides {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin: 1.25rem 0;
+}
+
+.admin-hero-slide {
+  border: 1px solid var(--color-core-light-grey, #e5e5e5);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  background: var(--color-core-white, #fff);
+}
+
+.admin-hero-slide__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.25rem;
+}

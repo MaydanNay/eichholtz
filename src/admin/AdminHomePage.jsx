@@ -2,13 +2,20 @@ import React, { useEffect, useState, useRef } from 'react'
 import { api } from './api'
 import AdminPageHeader from './AdminPageHeader'
 import CustomSelect from '../components/CustomSelect'
+import ImageUploadField from './ImageUploadField'
 import { Link } from 'react-router-dom'
 import HeroSection from '../sections/HeroSection'
 import CollectionSection from '../sections/CollectionSection'
+import {
+  createEmptyHeroSlide,
+  parseHeroSlides,
+  slidesFromHeroCollections,
+} from '../utils/heroSlides'
+import { collectionUrl } from '../utils/collectionUrl'
 
 export default function AdminHomePage() {
   const [collections, setCollections] = useState([])
-  const [heroItems, setHeroItems] = useState([])
+  const [heroSlides, setHeroSlides] = useState([])
   const [expandedSeasons, setExpandedSeasons] = useState([])
   const [seasons, setSeasons] = useState([])
   const [settings, setSettings] = useState({ block2_title: 'Новые коллекции' })
@@ -22,17 +29,16 @@ export default function AdminHomePage() {
   const load = async () => {
     try {
       const [colls, seas, sets] = await Promise.all([
-        api.getCollections({ kind: 'category' }), // fetch all category collections (not catalogs)
-        api.getSeasons(), // fetch all seasons
+        api.getCollections({ kind: 'category' }),
+        api.getSeasons(),
         api.getHomeSettings()
       ])
       setCollections(colls)
-      
-      const sortedHero = colls
-        .filter(c => c.hero_order !== null && c.hero_order !== undefined)
-        .sort((a, b) => a.hero_order - b.hero_order)
-        .map(c => c.id)
-      setHeroItems(sortedHero)
+
+      const parsed = parseHeroSlides(sets.hero_slides)
+      const legacy = slidesFromHeroCollections(colls)
+      // Empty/corrupt hero_slides → fall back to collections with hero_order
+      setHeroSlides(parsed.length > 0 ? parsed : legacy)
 
       setSeasons(seas)
       setSettings(prev => ({ ...prev, ...sets }))
@@ -51,18 +57,37 @@ export default function AdminHomePage() {
     ))
   }
 
-  const handleHeroItemChange = (index, newId) => {
-    const newItems = [...heroItems]
-    newItems[index] = newId
-    setHeroItems(newItems)
+  const updateHeroSlide = (index, patch) => {
+    setHeroSlides((prev) =>
+      prev.map((slide, i) => (i === index ? { ...slide, ...patch } : slide))
+    )
   }
 
-  const removeHeroItem = (index) => {
-    setHeroItems(heroItems.filter((_, i) => i !== index))
+  const fillHeroSlideFromCollection = (index, collectionId) => {
+    if (collectionId === '' || collectionId == null) {
+      updateHeroSlide(index, { collection_id: null })
+      return
+    }
+    const collection = collections.find((c) => String(c.id) === String(collectionId))
+    if (!collection) {
+      updateHeroSlide(index, { collection_id: null })
+      return
+    }
+    updateHeroSlide(index, {
+      collection_id: collection.id,
+      title: collection.name || '',
+      subtitle: collection.season_name || '',
+      image_url: collection.image_url || '',
+      link: collectionUrl(collection),
+    })
   }
 
-  const addHeroItem = () => {
-    setHeroItems([...heroItems, ''])
+  const removeHeroSlide = (index) => {
+    setHeroSlides(heroSlides.filter((_, i) => i !== index))
+  }
+
+  const addHeroSlide = () => {
+    setHeroSlides([...heroSlides, createEmptyHeroSlide()])
   }
 
   const handleSeasonChange = (id, field, value) => {
@@ -122,32 +147,84 @@ export default function AdminHomePage() {
     setSaving(true)
     setError('')
     try {
+      const slidesToSave = heroSlides
+        .map((slide, index) => ({
+          id: slide.id || `slide-${index + 1}`,
+          subtitle: (slide.subtitle || '').trim(),
+          title: (slide.title || '').trim(),
+          image_url: (slide.image_url || '').trim(),
+          link: (slide.link || '').trim(),
+          collection_id: slide.collection_id ? Number(slide.collection_id) || slide.collection_id : null,
+        }))
+        .filter((slide) => slide.title || slide.image_url || slide.link)
+
+      if (editingBlock1 && slidesToSave.length === 0) {
+        throw new Error('Добавьте хотя бы один слайд с заголовком, фото или ссылкой')
+      }
+
       const collectionsToSave = collections.map((c, idx) => {
-        const heroIndex = heroItems.findIndex(id => id !== '' && String(id) === String(c.id))
+        let heroOrder = c.hero_order ?? null
+        if (editingBlock1) {
+          const heroIndex = slidesToSave.findIndex(
+            (s) => s.collection_id != null && String(s.collection_id) === String(c.id),
+          )
+          heroOrder = heroIndex !== -1 ? heroIndex + 1 : null
+        }
         return {
           id: c.id,
-          hero_order: heroIndex !== -1 ? heroIndex + 1 : null,
+          hero_order: heroOrder,
           sort_order: c.sort_order !== undefined ? c.sort_order : idx,
-          show_on_home: !!c.show_on_home
+          show_on_home: !!c.show_on_home,
         }
       })
 
-      await Promise.all([
-        api.saveHomeCollections(collectionsToSave),
-        api.saveHomeSeasons(seasons.map((s, idx) => ({
-          id: s.id,
-          sort_order: s.sort_order !== undefined ? s.sort_order : idx,
-          show_on_home: !!s.show_on_home
-        }))),
-        api.saveHomeSettings({ block2_title: settings.block2_title })
-      ])
+      const settingsPayload = {
+        block2_title: settings.block2_title || 'Новые коллекции',
+      }
+      // Only rewrite hero slides when editing block 1
+      if (editingBlock1) {
+        settingsPayload.hero_slides = JSON.stringify(slidesToSave)
+      }
+
+      await api.saveHomeSettings(settingsPayload)
+      await api.saveHomeCollections(collectionsToSave)
+      await api.saveHomeSeasons(seasons.map((s, idx) => ({
+        id: s.id,
+        sort_order: s.sort_order !== undefined ? s.sort_order : idx,
+        show_on_home: !!s.show_on_home
+      })))
+
+      if (editingBlock1) {
+        await Promise.allSettled(
+          slidesToSave
+            .filter((s) => s.collection_id && s.image_url)
+            .map((s) => {
+              const current = collections.find((c) => String(c.id) === String(s.collection_id))
+              if (!current || current.image_url === s.image_url) return Promise.resolve()
+              return api.updateCollection(s.collection_id, {
+                season_id: current.season_id,
+                parent_collection_id: current.parent_collection_id,
+                name: current.name,
+                description: current.description,
+                image_url: s.image_url,
+                pdf_url: current.pdf_url,
+                published: current.published,
+                sort_order: current.sort_order,
+                kind: current.kind,
+                show_on_home: current.show_on_home,
+                is_new: current.is_new,
+              })
+            }),
+        )
+        setHeroSlides(slidesToSave)
+      }
+
       alert('Настройки сохранены')
-      load()
-      await load() // reload to fetch new previews
+      await load()
       setEditingBlock1(false)
       setEditingBlock2(false)
     } catch (err) {
-      setError(err.message)
+      setError(err.message || 'Ошибка сохранения')
     } finally {
       setSaving(false)
     }
@@ -173,72 +250,107 @@ export default function AdminHomePage() {
             </button>
           </div>
           <div style={{ border: '1px solid var(--color-ui-bg-light)', borderRadius: '8px', overflow: 'hidden' }}>
-            <HeroSection isPreview={true} />
+            <HeroSection
+              isPreview={true}
+              slidesOverride={heroSlides}
+              key={heroSlides.map((s) => s.image_url || s.id).join('|')}
+            />
           </div>
         </div>
       ) : (
         <div className="admin-card">
           <h2>Блок 1: Автоскролл (Герой)</h2>
           <p className="admin-muted">
-            Добавьте коллекции, которые должны отображаться в главном слайдере, и выберите их в нужном порядке.
+            Для каждого слайда задайте надзаголовок, заголовок, фото и ссылку кнопки «Смотреть коллекцию».
+            Можно быстро заполнить поля из существующей коллекции и потом поправить вручную.
           </p>
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th style={{ width: '80px' }}>Порядок</th>
-              <th>Название коллекции</th>
-              <th style={{ width: '100px' }}>Действия</th>
-            </tr>
-          </thead>
-          <tbody>
-            {heroItems.map((colId, index) => (
-              <tr key={index}>
-                <td>{index + 1}</td>
-                <td>
-                  <div style={{ maxWidth: '400px' }}>
-                    <CustomSelect
-                      value={colId || ''}
-                      onChange={val => handleHeroItemChange(index, val)}
-                      placeholder="Выберите коллекцию..."
-                      options={collections
-                        .filter(c => String(c.id) === String(colId) || !heroItems.some(id => String(id) === String(c.id)))
-                        .map(c => ({ value: c.id, label: c.name }))}
-                    />
-                  </div>
-                </td>
-                <td>
-                  <button 
-                    type="button" 
-                    className="admin-btn" 
-                    style={{ padding: '4px 8px', fontSize: '0.8rem', color: 'var(--color-core-black)' }}
-                    onClick={() => removeHeroItem(index)}
+
+          <div className="admin-hero-slides">
+            {heroSlides.map((slide, index) => (
+              <div key={slide.id || index} className="admin-hero-slide">
+                <div className="admin-hero-slide__head">
+                  <strong>Слайд {index + 1}</strong>
+                  <button
+                    type="button"
+                    className="admin-btn"
+                    style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                    onClick={() => removeHeroSlide(index)}
                   >
                     Удалить
                   </button>
-                </td>
-              </tr>
+                </div>
+
+                <div className="admin-field admin-field--full">
+                  <span>Заполнить из коллекции (необязательно)</span>
+                  <div style={{ maxWidth: '420px' }}>
+                    <CustomSelect
+                      value={slide.collection_id != null ? String(slide.collection_id) : ''}
+                      onChange={(val) => fillHeroSlideFromCollection(index, val)}
+                      placeholder="Выберите коллекцию..."
+                      options={[
+                        { value: '', label: '— вручную —' },
+                        ...collections.map((c) => ({ value: String(c.id), label: c.name })),
+                      ]}
+                    />
+                  </div>
+                </div>
+
+                <div className="admin-field admin-field--full">
+                  <span>Надзаголовок</span>
+                  <input
+                    type="text"
+                    value={slide.subtitle || ''}
+                    onChange={(e) => updateHeroSlide(index, { subtitle: e.target.value })}
+                    placeholder="Например: Зима 2026"
+                  />
+                </div>
+
+                <div className="admin-field admin-field--full">
+                  <span>Заголовок</span>
+                  <input
+                    type="text"
+                    value={slide.title || ''}
+                    onChange={(e) => updateHeroSlide(index, { title: e.target.value })}
+                    placeholder="Название на слайде"
+                  />
+                </div>
+
+                <ImageUploadField
+                  label="Фото"
+                  category="hero"
+                  value={slide.image_url || ''}
+                  onChange={(url) => updateHeroSlide(index, { image_url: url })}
+                />
+
+                <div className="admin-field admin-field--full">
+                  <span>Ссылка кнопки «Смотреть коллекцию»</span>
+                  <input
+                    type="text"
+                    value={slide.link || ''}
+                    onChange={(e) => updateHeroSlide(index, { link: e.target.value })}
+                    placeholder="/collection/123-name или https://..."
+                  />
+                </div>
+              </div>
             ))}
-            <tr>
-              <td colSpan="3">
-                <button type="button" className="admin-btn admin-btn--primary" onClick={addHeroItem}>
-                  + Добавить коллекцию
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-            <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem' }}>
-              <button type="button" className="admin-btn admin-btn--primary" onClick={handleSave} disabled={saving}>
-                {saving ? 'Сохранение...' : 'Сохранить'}
-              </button>
-              <button type="button" className="admin-btn" onClick={() => {
-                setEditingBlock1(false)
-                load()
-              }} disabled={saving}>
-                Отмена
-              </button>
-            </div>
           </div>
+
+          <button type="button" className="admin-btn admin-btn--primary" onClick={addHeroSlide}>
+            + Добавить слайд
+          </button>
+
+          <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem' }}>
+            <button type="button" className="admin-btn admin-btn--primary" onClick={handleSave} disabled={saving}>
+              {saving ? 'Сохранение...' : 'Сохранить'}
+            </button>
+            <button type="button" className="admin-btn" onClick={() => {
+              setEditingBlock1(false)
+              load()
+            }} disabled={saving}>
+              Отмена
+            </button>
+          </div>
+        </div>
       )}
 
       {!editingBlock2 ? (

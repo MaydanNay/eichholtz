@@ -1,9 +1,12 @@
 import Reveal from '../components/Reveal'
-import { SHOWROOMS, SHOWROOM_ORDER } from '../data/contacts'
+import { SHOWROOMS, SHOWROOM_ORDER, toTelHref, toWhatsAppNumber } from '../data/contacts'
 import { useContacts } from '../hooks/useContacts'
 
 export default function ContactsSection() {
-  const { contacts, loading } = useContacts()
+  const { contacts } = useContacts()
+  const waDisplay = contacts.whatsapp || contacts.astanaPhone
+  const waDigits = toWhatsAppNumber(waDisplay)
+
   return (
     <section className="contacts" id="contacts">
       <Reveal className="contacts__left reveal-stagger" variant="left">
@@ -17,15 +20,15 @@ export default function ContactsSection() {
         <div className="contacts__info" style={{ '--stagger': 2 }}>
           <div className="contacts__row">
             <span className="contacts__label">Позвонить:</span>
-            <a href={`tel:${contacts.astanaPhone?.replace(/[^+\d]/g, '')}`}>{contacts.astanaPhone}</a>
+            <a href={`tel:${toTelHref(contacts.astanaPhone)}`}>{contacts.astanaPhone}</a>
           </div>
           <div className="contacts__row">
             <span className="contacts__label">Написать:</span>
             <div className="contacts__write">
               <p>
                 WhatsApp:{' '}
-                <a href={`https://wa.me/${contacts.astanaPhone?.replace(/[^\d]/g, '')}`} target="_blank" rel="noreferrer">
-                  {contacts.astanaPhone}
+                <a href={`https://wa.me/${waDigits}`} target="_blank" rel="noreferrer">
+                  {waDisplay}
                 </a>
               </p>
               {contacts.emailGeneral && (
@@ -64,16 +67,16 @@ export default function ContactsSection() {
               <p className="showroom-card__phone">
                 Позвонить:{' '}
                 {key === 'astana' && contacts.astanaPhone ? (
-                  <a href={`tel:${contacts.astanaPhone.replace(/[^+\d]/g, '')}`}>{contacts.astanaPhone}</a>
+                  <a href={`tel:${toTelHref(contacts.astanaPhone)}`}>{contacts.astanaPhone}</a>
                 ) : key === 'almaty' && contacts.almatyPhone ? (
-                  <a href={`tel:${contacts.almatyPhone.replace(/[^+\d]/g, '')}`}>{contacts.almatyPhone}</a>
+                  <a href={`tel:${toTelHref(contacts.almatyPhone)}`}>{contacts.almatyPhone}</a>
                 ) : (
                   <span>Номера не добавлены</span>
                 )}
               </p>
               <p className="showroom-card__wa">
                 WhatsApp:{' '}
-                <a href={`https://wa.me/${(key === 'astana' ? contacts.astanaPhone : (contacts.almatyPhone || contacts.astanaPhone))?.replace(/[^\d]/g, '')}`} target="_blank" rel="noreferrer">
+                <a href={`https://wa.me/${waDigits}`} target="_blank" rel="noreferrer">
                   Написать
                 </a>
               </p>

@@ -48,7 +48,7 @@ export default function AboutPage() {
       >
         <h1
           className="about-page__title"
-          style={{ "--stagger": 0, fontSize: "2.5rem" }}
+          style={{ "--stagger": 0 }}
         >
           ОТКРОЙТЕ <em>историю</em> EICHHOLTZ
         </h1>

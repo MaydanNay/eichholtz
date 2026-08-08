@@ -1,6 +1,13 @@
-import React from 'react'
+import { useContacts } from '../hooks/useContacts'
+import { toTelHref, toWhatsAppNumber } from '../data/contacts'
 
 export default function ContractPage() {
+  const { contacts } = useContacts()
+  const phone = contacts.astanaPhone
+  const wa = contacts.whatsapp || contacts.astanaPhone
+  const waDigits = toWhatsAppNumber(wa)
+  const telHref = toTelHref(phone)
+
   return (
     <div className="contract-page">
       <section className="contract-hero">
@@ -51,22 +58,37 @@ export default function ContractPage() {
             Eichholtz предлагает мебельные решения под ключ, объединяя высококлассную корпусную и мягкую мебель, освещение, аксессуары и решения для улицы. Каждый элемент тщательно подбирается с учетом особенностей вашего проекта.
           </p>
           <div className="contract-split__contacts" style={{ marginTop: '2rem', lineHeight: '1.6' }}>
-            <p style={{ marginBottom: '1rem' }}>
-              <strong>Позвонить:</strong><br />
-              <a href="tel:+77007432459" style={{ color: 'inherit', textDecoration: 'none' }}>+7 700 743 24 59</a>
-            </p>
-            <p style={{ marginBottom: '1rem' }}>
-              <strong>Написать:</strong><br />
-              WhatsApp: <a href="https://wa.me/77007432459" target="_blank" rel="noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>+7 700 743 24 59</a>
-            </p>
-            <p style={{ marginBottom: '1rem' }}>
-              <strong>Общая почта:</strong><br />
-              <a href="mailto:info@ideadecor.kz" style={{ color: 'inherit', textDecoration: 'none' }}>info@ideadecor.kz</a>
-            </p>
-            <p>
-              <strong>Сотрудничество и предложения:</strong><br />
-              <a href="mailto:marketing@ideadecor.kz" style={{ color: 'inherit', textDecoration: 'none' }}>marketing@ideadecor.kz</a>
-            </p>
+            {phone && (
+              <p style={{ marginBottom: '1rem' }}>
+                <strong>Позвонить:</strong><br />
+                <a href={`tel:${telHref}`} style={{ color: 'inherit', textDecoration: 'none' }}>{phone}</a>
+              </p>
+            )}
+            {wa && waDigits && (
+              <p style={{ marginBottom: '1rem' }}>
+                <strong>Написать:</strong><br />
+                WhatsApp:{' '}
+                <a href={`https://wa.me/${waDigits}`} target="_blank" rel="noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>
+                  {wa}
+                </a>
+              </p>
+            )}
+            {contacts.emailGeneral && (
+              <p style={{ marginBottom: '1rem' }}>
+                <strong>Общая почта:</strong><br />
+                <a href={`mailto:${contacts.emailGeneral}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                  {contacts.emailGeneral}
+                </a>
+              </p>
+            )}
+            {contacts.emailCoop && (
+              <p>
+                <strong>Сотрудничество и предложения:</strong><br />
+                <a href={`mailto:${contacts.emailCoop}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                  {contacts.emailCoop}
+                </a>
+              </p>
+            )}
           </div>
         </div>
       </section>

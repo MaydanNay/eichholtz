@@ -1,4 +1,5 @@
-import { CONTACT_INFO } from '../data/contacts'
+import { getCachedContacts, toWhatsAppNumber } from '../data/contacts'
+import { ensureContactsLoaded } from '../hooks/useContacts'
 
 function formatPrice(value) {
   const amount = Number(value) || 0
@@ -6,12 +7,17 @@ function formatPrice(value) {
   return `${amount.toLocaleString('ru-RU')} ₸`
 }
 
-/** Build wa.me URL with prefilled inquiry text for the site WhatsApp. */
-export function buildInquiryWhatsAppUrl({
+function resolveWhatsAppDigits() {
+  const contacts = getCachedContacts()
+  return toWhatsAppNumber(contacts.whatsapp || contacts.astanaPhone)
+}
+
+function buildMessageText({
   name = '',
   phone = '',
   message = '',
   productName = '',
+  productLink = '',
   cartItems = null,
   total = 0,
   kind = '',
@@ -30,6 +36,7 @@ export function buildInquiryWhatsAppUrl({
     if (totalLabel) lines.push(`\nИтого на сайте: ${totalLabel}`)
   } else if (productName) {
     lines.push(`Здравствуйте! Интересует стоимость товара: ${productName}`)
+    if (productLink) lines.push(productLink)
   } else if (kind === 'designers') {
     lines.push('Здравствуйте! Хочу вступить в программу лояльности для дизайнеров.')
     if (message?.trim()) lines.push(message.trim())
@@ -46,11 +53,18 @@ export function buildInquiryWhatsAppUrl({
     lines.push(`Комментарий: ${message.trim()}`)
   }
 
-  return `https://wa.me/${CONTACT_INFO.whatsapp}?text=${encodeURIComponent(lines.join('\n'))}`
+  return lines.join('\n')
 }
 
-/** Open WhatsApp chat after a successful CRM save. */
+/** Build wa.me URL with prefilled inquiry text for the site WhatsApp. */
+export function buildInquiryWhatsAppUrl(payload = {}) {
+  return `https://wa.me/${resolveWhatsAppDigits()}?text=${encodeURIComponent(buildMessageText(payload))}`
+}
+
+/** Open WhatsApp chat. Uses cached contacts immediately so window.open stays sync (no popup block). */
 export function openInquiryWhatsApp(payload) {
+  // Refresh cache in background; URL can use defaults until then.
+  ensureContactsLoaded().catch(() => {})
   const url = buildInquiryWhatsAppUrl(payload)
   if (typeof window !== 'undefined') {
     window.open(url, '_blank', 'noopener,noreferrer')

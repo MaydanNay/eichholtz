@@ -5,7 +5,6 @@ import { getCategories } from '../api/categories'
 import { getHomeSettings } from '../api/homeSettings'
 import { categoryUrl } from '../utils/categoryUrl'
 import CustomSelect from '../components/CustomSelect'
-import PriceInquiryModal from '../components/PriceInquiryModal'
 import FavoriteButton from '../components/FavoriteButton'
 import AddToCartButton from '../components/AddToCartButton'
 import Reveal from '../components/Reveal'
@@ -165,7 +164,6 @@ export default function ProductsCatalogSection({
   const [filterColors, setFilterColors] = useState({})
   const [currentPage, setCurrentPage] = useState(1)
   const [loading, setLoading] = useState(true)
-  const [modalProduct, setModalProduct] = useState(null)
   const [sortValue, setSortValue] = useState('newest')
   const [localCategoryFilters, setLocalCategoryFilters] = useState(categoryFilter ? [categoryFilter] : [])
   const [expandedCategories, setExpandedCategories] = useState({})
@@ -761,7 +759,6 @@ export default function ProductsCatalogSection({
                       product={product}
                       style={{ '--stagger': index % PAGE_SIZE }}
                       onCartOpen={onCartOpen}
-                      onPriceInquiry={(p) => setModalProduct(p)}
                     />
                   ))}
                 </Reveal>
@@ -772,12 +769,6 @@ export default function ProductsCatalogSection({
           </div>
         </div>
       </section>
-
-      <PriceInquiryModal
-        isOpen={!!modalProduct}
-        product={modalProduct}
-        onClose={() => setModalProduct(null)}
-      />
     </>
   )
 }

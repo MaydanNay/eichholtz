@@ -1,11 +1,23 @@
 import { Link } from 'react-router-dom'
+import { openInquiryWhatsApp } from '../utils/inquiryWhatsApp'
 import { productUrl } from '../utils/productUrl'
 import { useProductGalleryImages } from '../utils/useProductGalleryImages'
 import FavoriteButton from './FavoriteButton'
 import AddToCartButton from './AddToCartButton'
 
-export default function ProductCard({ product, style, onCartOpen, onPriceInquiry }) {
+export default function ProductCard({ product, style, onCartOpen }) {
   const images = useProductGalleryImages(product)
+
+  const handlePriceInquiry = (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const path = productUrl(product)
+    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    openInquiryWhatsApp({
+      productName: product.name,
+      productLink: origin ? `${origin}${path}` : path,
+    })
+  }
 
   return (
     <article className="product-card" style={style}>
@@ -69,7 +81,7 @@ export default function ProductCard({ product, style, onCartOpen, onPriceInquiry
           <button
             type="button"
             className="product-card__btn product-card__btn--outline"
-            onClick={() => onPriceInquiry(product)}
+            onClick={handlePriceInquiry}
           >
             Узнать цену
           </button>

@@ -1,7 +1,14 @@
 import React from 'react'
 import ContactsPage from './ContactsPage'
+import { useContacts } from '../hooks/useContacts'
+import { toTelHref } from '../data/contacts'
 
 export default function BrandedResidencesPage() {
+  const { contacts } = useContacts()
+  const contractPhone = contacts.contractPhone
+  const contractEmail = contacts.emailContract
+  const telHref = toTelHref(contractPhone)
+
   return (
     <div className="branded-page">
       <section className="branded-header">
@@ -91,8 +98,17 @@ export default function BrandedResidencesPage() {
       <section className="hospitality-contact-intro">
         <h2 className="hospitality-contact-intro__title">Наша команда готова вам помочь</h2>
         <p className="hospitality-contact-intro__text">
-          Телефон: <a href="tel:+31252755484">+31 25 275 5484</a><br/>
-          Email: <a href="mailto:contract@eichholtz.com">contract@eichholtz.com</a>
+          {contractPhone && (
+            <>
+              Телефон: <a href={`tel:${telHref}`}>{contractPhone}</a>
+              <br />
+            </>
+          )}
+          {contractEmail && (
+            <>
+              Email: <a href={`mailto:${contractEmail}`}>{contractEmail}</a>
+            </>
+          )}
         </p>
       </section>
 

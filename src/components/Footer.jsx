@@ -49,7 +49,11 @@ export default function Footer() {
             <h4 className="footer__col-title">О компании</h4>
             <Link to="/about">О бренде</Link>
             <Link to="/about">Наши преимущества (USP)</Link>
-            <a href="mailto:marketing@ideadecor.kz">Вакансии</a>
+            {contacts.emailCoop ? (
+              <a href={`mailto:${contacts.emailCoop}`}>Вакансии</a>
+            ) : (
+              <span>Вакансии</span>
+            )}
           </div>
 
           <div className="footer__col">
