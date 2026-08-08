@@ -51,6 +51,7 @@ export default function ProductsCatalogSection({
   hideSidebar = false,
 }) {
   const [products, setProducts] = useState([])
+  const [totalProducts, setTotalProducts] = useState(0)
   const [categoriesList, setCategoriesList] = useState([])
   const [filterColors, setFilterColors] = useState({})
   const [currentPage, setCurrentPage] = useState(1)
@@ -60,6 +61,7 @@ export default function ProductsCatalogSection({
   const [expandedCategories, setExpandedCategories] = useState({})
   const [expandedSpecs, setExpandedSpecs] = useState({})
   const [selectedSpecs, setSelectedSpecs] = useState({}) // { [key]: [value1, value2] }
+  const [availableSpecs, setAvailableSpecs] = useState([])
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const navigate = useNavigate()
 
@@ -79,27 +81,6 @@ export default function ProductsCatalogSection({
 
     return roots
   }, [categoriesList])
-
-  const categoryCounts = useMemo(() => {
-    const counts = {}
-    const catMap = new Map()
-    categoriesList.forEach(c => catMap.set(c.id, c))
-    
-    products.forEach(p => {
-      if (p.category_id) {
-        let currentId = p.category_id
-        // To prevent infinite loops in case of circular references, keep track of visited
-        const visited = new Set()
-        while (currentId && !visited.has(currentId)) {
-          visited.add(currentId)
-          counts[currentId] = (counts[currentId] || 0) + 1
-          const cat = catMap.get(currentId)
-          currentId = cat ? cat.parent_id : null
-        }
-      }
-    })
-    return counts
-  }, [products, categoriesList])
 
   const toggleCategory = (id, e) => {
     e.preventDefault()
@@ -242,55 +223,69 @@ export default function ProductsCatalogSection({
   }, [])
 
   useEffect(() => {
+    let cancelled = false
     setLoading(true)
-    setCurrentPage(1)
     const categoryIds =
       localCategoryFilters.length > 0
         ? localCategoryFilters
         : categoryFilter != null
           ? [categoryFilter]
           : []
+    // Facets are heavy — refresh when filters change, not on every page flip.
+    const wantFacets = currentPage === 1
     getProducts({
       collectionId: collectionFilter || undefined,
       catalogId: catalogFilter || undefined,
       categoryId: categoryIds.length > 0 ? categoryIds.join(',') : undefined,
       q: searchQuery || undefined,
-      limit: searchQuery ? 100 : undefined,
+      page: currentPage,
+      limit: PAGE_SIZE,
+      sort: sortValue,
+      specs: Object.keys(selectedSpecs).length > 0 ? selectedSpecs : undefined,
+      includeFacets: wantFacets,
     })
-      .then(setProducts)
-      .catch(() => setProducts([]))
-      .finally(() => setLoading(false))
-  }, [collectionFilter, catalogFilter, categoryFilter, localCategoryFilters, searchQuery])
+      .then((data) => {
+        if (cancelled) return
+        setProducts(data.items || [])
+        setTotalProducts(data.total || 0)
+        if (data.facets) {
+          const specsList = Object.entries(data.facets)
+            .filter(([key]) => {
+              if (EXCLUDED_SPECS.includes(key)) return false
+              if (!SPEC_LABELS[key] && /[_-]/.test(key)) return false
+              return true
+            })
+            .map(([key, values]) => ({
+              label: getSpecLabel(key),
+              originalKey: key,
+              values: values || {},
+            }))
+            .sort((a, b) => a.label.localeCompare(b.label))
+          setAvailableSpecs(specsList)
+        }
+      })
+      .catch(() => {
+        if (cancelled) return
+        setProducts([])
+        setTotalProducts(0)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [collectionFilter, catalogFilter, categoryFilter, localCategoryFilters, searchQuery, currentPage, sortValue, selectedSpecs])
 
   // Clear spec filters when category or collection changes
   useEffect(() => {
     setSelectedSpecs({})
+    setCurrentPage(1)
   }, [collectionFilter, catalogFilter, localCategoryFilters])
 
-  const availableSpecs = useMemo(() => {
-    const specsMap = {}
-    products.forEach(p => {
-      if (!p.specs) return
-      let parsedSpecs = p.specs
-      if (typeof parsedSpecs === 'string') {
-        try { parsedSpecs = JSON.parse(parsedSpecs) } catch { return }
-      }
-      for (const [key, value] of Object.entries(parsedSpecs)) {
-        if (!value) continue
-        const lowerKey = key.toLowerCase()
-        if (EXCLUDED_SPECS.includes(lowerKey)) continue
-        // Hide raw technical keys that weren't translated into a known label
-        if (!SPEC_LABELS[lowerKey] && /[_-]/.test(lowerKey)) continue
-        
-        if (!specsMap[lowerKey]) specsMap[lowerKey] = { label: getSpecLabel(key), originalKey: lowerKey, values: {} }
-        
-        const valStr = String(value).trim()
-        if (!specsMap[lowerKey].values[valStr]) specsMap[lowerKey].values[valStr] = 0
-        specsMap[lowerKey].values[valStr]++
-      }
-    })
-    return Object.values(specsMap).sort((a, b) => a.label.localeCompare(b.label))
-  }, [products])
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery])
 
   const toggleSpecValue = (specKey, value) => {
     setSelectedSpecs(prev => {
@@ -312,55 +307,8 @@ export default function ProductsCatalogSection({
     setExpandedSpecs(prev => ({ ...prev, [specKey]: !prev[specKey] }))
   }
 
-  // Filter products by selected specs
-  const specFilteredProducts = useMemo(() => {
-    if (Object.keys(selectedSpecs).length === 0) return products
-
-    return products.filter(p => {
-      let parsedSpecs = p.specs || {}
-      if (typeof parsedSpecs === 'string') {
-        try { parsedSpecs = JSON.parse(parsedSpecs) } catch { parsedSpecs = {} }
-      }
-
-      // Must match ALL selected spec categories (AND logic between categories, OR logic within a category)
-      return Object.entries(selectedSpecs).every(([specKey, selectedValues]) => {
-        if (!selectedValues || selectedValues.length === 0) return true
-        
-        // Find matching key case-insensitively in product specs
-        const pSpecEntry = Object.entries(parsedSpecs).find(([k]) => k.toLowerCase() === specKey)
-        if (!pSpecEntry) return false // Product doesn't have this spec
-        
-        const pSpecValue = String(pSpecEntry[1]).trim()
-        return selectedValues.includes(pSpecValue)
-      })
-    })
-  }, [products, selectedSpecs])
-
-  let sortedProducts = [...specFilteredProducts]
-  if (sortValue === 'price_asc') {
-    sortedProducts.sort((a, b) => (a.price || 0) - (b.price || 0))
-  } else if (sortValue === 'price_desc') {
-    sortedProducts.sort((a, b) => (b.price || 0) - (a.price || 0))
-  } else if (sortValue === 'name_asc') {
-    sortedProducts.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
-  } else if (sortValue === 'name_desc') {
-    sortedProducts.sort((a, b) => (b.name || '').localeCompare(a.name || ''))
-  } else if (sortValue === 'newest') {
-    sortedProducts.sort((a, b) => {
-      const dateA = a.created_at ? new Date(a.created_at).getTime() : a.id
-      const dateB = b.created_at ? new Date(b.created_at).getTime() : b.id
-      return dateB - dateA
-    })
-  } else if (sortValue === 'oldest') {
-    sortedProducts.sort((a, b) => {
-      const dateA = a.created_at ? new Date(a.created_at).getTime() : a.id
-      const dateB = b.created_at ? new Date(b.created_at).getTime() : b.id
-      return dateA - dateB
-    })
-  }
-
-  const totalPages = Math.ceil(sortedProducts.length / PAGE_SIZE)
-  const shown = sortedProducts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  const totalPages = Math.ceil(totalProducts / PAGE_SIZE)
+  const shown = products
   const hasSearch = !!searchQuery?.trim()
 
   const renderPagination = () => {
@@ -480,9 +428,12 @@ export default function ProductsCatalogSection({
                 <CustomSelect
                 value={sortValue}
                 options={SORT_OPTIONS}
-                onChange={setSortValue}
+                onChange={(value) => {
+                  setSortValue(value)
+                  setCurrentPage(1)
+                }}
               />
-              <div className="products-catalog__sidebar-specs" style={{ marginTop: 0, gap: '0.55rem' }}>
+              <div className="products-catalog__sidebar-specs" style={{ marginTop: 0 }}>
                 <div className="products-catalog__spec-group">
                   <button
                     type="button"
@@ -621,18 +572,21 @@ export default function ProductsCatalogSection({
                   <CustomSelect
                     value={sortValue}
                     options={SORT_OPTIONS}
-                    onChange={setSortValue}
+                    onChange={(value) => {
+                      setSortValue(value)
+                      setCurrentPage(1)
+                    }}
                   />
                 </div>
               </div>
             )}
             {loading ? (
               <p className="products-catalog__empty">Загрузка...</p>
-            ) : products.length === 0 ? (
+            ) : shown.length === 0 ? (
               <p className="products-catalog__empty">
                 {hasSearch
                   ? 'По вашему запросу ничего не найдено'
-                  : (collectionFilter || catalogFilter || localCategoryFilters.length > 0)
+                  : (collectionFilter || catalogFilter || localCategoryFilters.length > 0 || Object.keys(selectedSpecs).length > 0)
                     ? 'В этой подборке пока нет товаров'
                     : 'Товары не загружены'}
               </p>

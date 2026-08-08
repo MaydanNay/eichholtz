@@ -97,7 +97,7 @@ export default function ProductPage({ productId, onCartOpen, onCheckout }) {
         setActiveTab('description')
         setDimUnit('cm')
         if (data.collection_id) {
-          const items = await getProducts({ collectionId: data.collection_id }).catch(() => [])
+          const items = await getProducts({ collectionId: data.collection_id, limit: 12 }).catch(() => [])
           if (!cancelled) {
             setRelated(items.filter((item) => item.id !== data.id).slice(0, 4))
           }

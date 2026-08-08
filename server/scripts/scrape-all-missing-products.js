@@ -125,7 +125,7 @@ async function run() {
       objectID: String(item.objectID),
       sku: item.sku || String(item.objectID),
       fabric: item.fabric || '',
-      finish: item.finish || item.color || '',
+      finish: item.finish || '',
       material: item.website_material_filter || item.material || '',
       color: item.color || '',
       product_group: item.product_groupcode_filter || '',

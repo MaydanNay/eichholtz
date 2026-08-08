@@ -250,7 +250,7 @@ function buildSpecs(hit) {
     objectID: String(hit.objectID),
     sku: hit.sku ? String(hit.sku) : '',
     fabric: hit.fabric || '',
-    finish: hit.finish || hit.color || '',
+    finish: hit.finish || '',
     material: hit.website_material_filter || '',
     color: hit.color || '',
     product_group: hit.product_groupcode_filter || '',

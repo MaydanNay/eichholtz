@@ -48,10 +48,10 @@ export default function CatalogsNavPanel({ isOpen, onClose }) {
     }
 
     setProductsLoading(true)
-    getProducts({ collection_id: activeCategoryId, published: true, limit: PRODUCT_LIMIT })
+    getProducts({ collectionId: activeCategoryId, published: true, limit: PRODUCT_LIMIT })
       .then((data) => {
         if (cancelled) return
-        setProducts(data.products || [])
+        setProducts(Array.isArray(data) ? data : data.items || [])
       })
       .catch(() => {
         if (!cancelled) setProducts([])

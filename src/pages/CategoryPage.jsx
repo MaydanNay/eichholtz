@@ -74,9 +74,9 @@ export default function CategoryPage({ categoryId, onCartOpen }) {
             )
 
             // Product count for this page's category tree (includes nested).
-            getProducts({ categoryId: String(data.id) })
-              .then((prods) => {
-                if (!cancelled) setTotalProducts(prods.length)
+            getProducts({ categoryId: String(data.id), page: 1, limit: 1 })
+              .then((result) => {
+                if (!cancelled) setTotalProducts(result.total || 0)
               })
               .catch(() => {
                 if (!cancelled) setTotalProducts(0)

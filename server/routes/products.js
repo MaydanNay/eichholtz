@@ -96,6 +96,15 @@ function normalizeProductInput(body) {
   }
 }
 
+const PRODUCT_JOINS = `
+  FROM products p
+  LEFT JOIN collections coll ON coll.id = p.collection_id
+  LEFT JOIN seasons seas ON seas.id = coll.season_id
+  LEFT JOIN collections cat ON cat.id = p.catalog_id
+  LEFT JOIN categories catg ON catg.id = p.category_id
+  LEFT JOIN categories pcatg ON pcatg.id = catg.parent_id
+`
+
 const PRODUCT_SELECT = `
   SELECT p.*,
          coll.name AS collection_name,
@@ -104,13 +113,79 @@ const PRODUCT_SELECT = `
          catg.name AS category_name,
          catg.parent_id AS category_parent_id,
          pcatg.name AS category_parent_name
-  FROM products p
-  LEFT JOIN collections coll ON coll.id = p.collection_id
-  LEFT JOIN seasons seas ON seas.id = coll.season_id
-  LEFT JOIN collections cat ON cat.id = p.catalog_id
-  LEFT JOIN categories catg ON catg.id = p.category_id
-  LEFT JOIN categories pcatg ON pcatg.id = catg.parent_id
+  ${PRODUCT_JOINS}
 `
+
+/** Lighter payload for catalog cards (no long description). */
+const PRODUCT_LIST_SELECT = `
+  SELECT p.id, p.name, p.price, p.image_url, p.images, p.specs, p.created_at,
+         p.category_id, p.collection_id, p.catalog_id, p.published, p.in_stock, p.category,
+         coll.name AS collection_name,
+         seas.name AS collection_season_name,
+         cat.name AS catalog_name,
+         catg.name AS category_name,
+         catg.parent_id AS category_parent_id,
+         pcatg.name AS category_parent_name
+  ${PRODUCT_JOINS}
+`
+
+const FACET_EXCLUDED_SPECS = new Set([
+  'variation',
+  'height',
+  'diameter',
+  'width',
+  'depth',
+  'weight',
+  'sku',
+  'objectid',
+  'extra_collections',
+  'also_available_skus',
+  'categories_without_path',
+  'dimensions',
+  'extra_categories',
+  'specifications',
+])
+
+const SORT_SQL = {
+  newest: 'p.created_at DESC NULLS LAST, p.id DESC',
+  oldest: 'p.created_at ASC NULLS LAST, p.id ASC',
+  price_asc: 'p.price ASC NULLS LAST, p.id DESC',
+  price_desc: 'p.price DESC NULLS LAST, p.id DESC',
+  name_asc: 'p.name ASC NULLS LAST, p.id DESC',
+  name_desc: 'p.name DESC NULLS LAST, p.id DESC',
+}
+
+/** Specs sometimes store multi-values as JSON arrays: ["Стекло","Металл"]. */
+function expandSpecFacetValues(raw) {
+  const str = String(raw || '').trim()
+  if (!str) return []
+  if (str.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(str)
+      if (Array.isArray(parsed)) {
+        return parsed.map((v) => String(v || '').trim()).filter(Boolean)
+      }
+    } catch {
+      /* keep as plain string */
+    }
+  }
+  return [str]
+}
+
+function buildSpecValueMatchSql(keyPlaceholder, valuePlaceholders, values, params) {
+  // Exact match OR JSON-array string contains one of the selected values.
+  const exact = `trim(kv.value) IN (${valuePlaceholders.join(', ')})`
+  const arrayMatches = values.map((value) => {
+    params.push(`%"${String(value).replace(/"/g, '')}"%`)
+    return `(left(trim(kv.value), 1) = '[' AND trim(kv.value) LIKE $${params.length})`
+  })
+  return `EXISTS (
+      SELECT 1
+      FROM jsonb_each_text(COALESCE(p.specs, '{}'::jsonb)) kv
+      WHERE lower(kv.key) = ${keyPlaceholder}
+        AND (${[exact, ...arrayMatches].join(' OR ')})
+    )`
+}
 
 async function resolveCategoryLabel(category, categoryId) {
   if (categoryId) {
@@ -133,49 +208,51 @@ async function validateCollectionRef(id, kind) {
   return !!rows[0]
 }
 
-router.get('/', async (req, res) => {
-  try {
-    const { collection_id, catalog_id, category_id, q, limit } = req.query
-    const params = []
-    const clauses = []
-    let text = PRODUCT_SELECT
+async function buildProductFilters(req) {
+  const { collection_id, catalog_id, category_id, q, specs: specsRaw } = req.query
+  const params = []
+  const clauses = []
 
-    if (req.query.published === '1') {
-      params.push(true)
-      clauses.push(`p.published = $${params.length}`)
+  if (req.query.published === '1') {
+    params.push(true)
+    clauses.push(`p.published = $${params.length}`)
+  }
+
+  if (collection_id) {
+    const { rows: collRows } = await query('SELECT name FROM collections WHERE id = $1', [collection_id])
+    const collName = collRows[0]?.name
+    if (collName) {
+      params.push(Number(collection_id))
+      params.push(collName)
+      clauses.push(
+        `(p.collection_id = $${params.length - 1} OR p.specs->'extra_collections' @> to_jsonb($${params.length}::text))`,
+      )
+    } else {
+      params.push(collection_id)
+      clauses.push(`p.collection_id = $${params.length}`)
     }
+  }
 
-    if (collection_id) {
-      // Ищем по p.collection_id или p.specs->'extra_collections'
-      const { rows: collRows } = await query('SELECT name FROM collections WHERE id = $1', [collection_id])
-      const collName = collRows[0]?.name
-      if (collName) {
-        params.push(Number(collection_id))
-        params.push(collName)
-        clauses.push(`(p.collection_id = $${params.length - 1} OR p.specs->'extra_collections' @> to_jsonb($${params.length}::text))`)
-      } else {
-        params.push(collection_id)
-        clauses.push(`p.collection_id = $${params.length}`)
-      }
-    }
+  if (catalog_id) {
+    params.push(catalog_id)
+    clauses.push(`p.catalog_id = $${params.length}`)
+  }
 
-    if (catalog_id) {
-      params.push(catalog_id)
-      clauses.push(`p.catalog_id = $${params.length}`)
-    }
-
-    if (category_id) {
-      const ids = String(category_id).split(',').map(s => s.trim()).filter(Boolean)
-      if (ids.length > 0) {
-        const placeholders = ids.map(id => {
-          params.push(Number(id))
-          return `$${params.length}`
-        })
-        const extraChecks = ids.map(id => {
-          params.push(Number(id))
-          return `p.specs->'extra_categories' @> to_jsonb($${params.length}::int)`
-        })
-        clauses.push(`(
+  if (category_id) {
+    const ids = String(category_id)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    if (ids.length > 0) {
+      const placeholders = ids.map((id) => {
+        params.push(Number(id))
+        return `$${params.length}`
+      })
+      const extraChecks = ids.map((id) => {
+        params.push(Number(id))
+        return `p.specs->'extra_categories' @> to_jsonb($${params.length}::int)`
+      })
+      clauses.push(`(
           p.category_id IN (
             WITH RECURSIVE cat_tree AS (
               SELECT id FROM categories WHERE id IN (${placeholders.join(', ')})
@@ -187,14 +264,16 @@ router.get('/', async (req, res) => {
           )
           OR ${extraChecks.join(' OR ')}
         )`)
-      }
     }
+  }
 
-    const search = String(q || '').trim().replace(/[%_]/g, '')
-    if (search) {
-      params.push(`%${search}%`)
-      const placeholder = `$${params.length}`
-      clauses.push(`(
+  const search = String(q || '')
+    .trim()
+    .replace(/[%_]/g, '')
+  if (search) {
+    params.push(`%${search}%`)
+    const placeholder = `$${params.length}`
+    clauses.push(`(
         p.name ILIKE ${placeholder}
         OR p.description ILIKE ${placeholder}
         OR p.category ILIKE ${placeholder}
@@ -202,26 +281,135 @@ router.get('/', async (req, res) => {
         OR cat.name ILIKE ${placeholder}
         OR catg.name ILIKE ${placeholder}
       )`)
+  }
+
+  let selectedSpecs = {}
+  if (specsRaw) {
+    try {
+      const parsed = typeof specsRaw === 'string' ? JSON.parse(specsRaw) : specsRaw
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        selectedSpecs = parsed
+      }
+    } catch {
+      selectedSpecs = {}
     }
+  }
 
-    if (clauses.length > 0) {
-      text += ` WHERE ${clauses.join(' AND ')}`
-    } else if (req.query.published === undefined && !isAdminRequest(req)) {
-      text += ' WHERE p.published = true'
-    }
+  for (const [rawKey, rawValues] of Object.entries(selectedSpecs)) {
+    const key = String(rawKey || '')
+      .trim()
+      .toLowerCase()
+    if (!key || FACET_EXCLUDED_SPECS.has(key)) continue
+    const values = (Array.isArray(rawValues) ? rawValues : [rawValues])
+      .map((v) => String(v || '').trim())
+      .filter(Boolean)
+    if (values.length === 0) continue
 
-    text += ' ORDER BY p.created_at DESC'
+    params.push(key)
+    const keyPlaceholder = `$${params.length}`
+    const valuePlaceholders = values.map((value) => {
+      params.push(value)
+      return `$${params.length}`
+    })
+    clauses.push(buildSpecValueMatchSql(keyPlaceholder, valuePlaceholders, values, params))
+  }
 
+  if (clauses.length === 0 && req.query.published === undefined && !isAdminRequest(req)) {
+    clauses.push('p.published = true')
+  }
+
+  const whereSql = clauses.length > 0 ? ` WHERE ${clauses.join(' AND ')}` : ''
+  return { params, whereSql, search }
+}
+
+router.get('/', async (req, res) => {
+  try {
+    const { limit, page, sort, include_facets: includeFacets } = req.query
+    const { params, whereSql, search } = await buildProductFilters(req)
+
+    const pageNum = Number(page)
+    const wantsPagination = Number.isFinite(pageNum) && pageNum > 0
     const limitNum = Number(limit)
     const hasSearch = search.length > 0
-    if (Number.isFinite(limitNum) && limitNum > 0) {
-      text += ` LIMIT ${Math.min(100, Math.floor(limitNum))}`
+    const sortKey = SORT_SQL[String(sort || '')] ? String(sort) : 'newest'
+    const orderSql = SORT_SQL[sortKey]
+
+    let limitClause = ''
+    let offsetClause = ''
+    let resolvedLimit = null
+    let resolvedPage = 1
+
+    if (wantsPagination) {
+      resolvedPage = Math.floor(pageNum)
+      resolvedLimit = Number.isFinite(limitNum) && limitNum > 0 ? Math.min(48, Math.floor(limitNum)) : 12
+      const offset = (resolvedPage - 1) * resolvedLimit
+      limitClause = ` LIMIT ${resolvedLimit}`
+      offsetClause = ` OFFSET ${offset}`
+    } else if (Number.isFinite(limitNum) && limitNum > 0) {
+      resolvedLimit = Math.min(100, Math.floor(limitNum))
+      limitClause = ` LIMIT ${resolvedLimit}`
     } else if (hasSearch) {
-      text += ' LIMIT 100'
+      resolvedLimit = 100
+      limitClause = ' LIMIT 100'
     }
 
+    const selectSql = wantsPagination ? PRODUCT_LIST_SELECT : PRODUCT_SELECT
+    const text = `${selectSql}${whereSql} ORDER BY ${orderSql}${limitClause}${offsetClause}`
     const { rows } = await query(text, params)
-    res.json(rows.map(normalizeProduct))
+    const items = rows.map(normalizeProduct)
+
+    if (!wantsPagination) {
+      res.json(items)
+      return
+    }
+
+    const countText = `SELECT COUNT(*)::int AS total ${PRODUCT_JOINS}${whereSql}`
+    const { rows: countRows } = await query(countText, params)
+    const total = countRows[0]?.total || 0
+
+    const payload = {
+      items,
+      total,
+      page: resolvedPage,
+      limit: resolvedLimit,
+      sort: sortKey,
+    }
+
+    if (includeFacets === '1') {
+      const facetParams = [...params]
+      facetParams.push([...FACET_EXCLUDED_SPECS])
+      const baseWhere = whereSql.replace(/^\s*WHERE\s+/i, '').trim()
+      const facetWhere = [
+        baseWhere || null,
+        `trim(kv.value) <> ''`,
+        `NOT (lower(kv.key) = ANY($${facetParams.length}::text[]))`,
+      ]
+        .filter(Boolean)
+        .join(' AND ')
+      const facetText = `
+        SELECT lower(kv.key) AS key, trim(kv.value) AS value, COUNT(*)::int AS count
+        ${PRODUCT_JOINS}
+        CROSS JOIN LATERAL jsonb_each_text(COALESCE(p.specs, '{}'::jsonb)) kv
+        WHERE ${facetWhere}
+        GROUP BY 1, 2
+        ORDER BY 1, 3 DESC, 2
+      `
+      try {
+        const { rows: facetRows } = await query(facetText, facetParams)
+        const facets = {}
+        for (const row of facetRows) {
+          if (!facets[row.key]) facets[row.key] = {}
+          for (const value of expandSpecFacetValues(row.value)) {
+            facets[row.key][value] = (facets[row.key][value] || 0) + row.count
+          }
+        }
+        payload.facets = facets
+      } catch {
+        payload.facets = {}
+      }
+    }
+
+    res.json(payload)
   } catch {
     res.status(500).json({ error: 'Ошибка сервера' })
   }

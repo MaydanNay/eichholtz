@@ -3426,7 +3426,7 @@
   flex-direction: column;
   gap: 0.65rem;
   padding-bottom: 0.35rem;
-  max-height: min(280px, 42vh);
+  max-height: min(560px, 70vh);
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: none;
@@ -3440,7 +3440,7 @@
 }
 
 .products-catalog__spec-group > .products-catalog__sidebar-list {
-  max-height: min(280px, 42vh);
+  max-height: min(560px, 70vh);
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: none;

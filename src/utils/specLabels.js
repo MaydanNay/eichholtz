@@ -125,6 +125,14 @@ export const VALUE_LABELS = {
 export function translateSpecValue(val) {
   if (!val) return ''
   const str = String(val).trim()
+  if (str.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(str)
+      if (Array.isArray(parsed)) return formatSpecDisplayValue(parsed)
+    } catch {
+      /* fall through */
+    }
+  }
   if (VALUE_LABELS[str]) return VALUE_LABELS[str]
   const lower = str.toLowerCase()
   for (const [k, v] of Object.entries(VALUE_LABELS)) {

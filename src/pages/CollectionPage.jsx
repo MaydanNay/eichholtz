@@ -37,9 +37,9 @@ export default function CollectionPage({ collectionId, onCartOpen }) {
         setCollection(data)
         
         const filterKey = data.kind === 'catalog' ? 'catalogId' : 'collectionId'
-        getProducts({ [filterKey]: data.id })
-          .then(prods => {
-            if (!cancelled) setTotalProducts(prods.length)
+        getProducts({ [filterKey]: data.id, page: 1, limit: 1 })
+          .then((result) => {
+            if (!cancelled) setTotalProducts(result.total || 0)
           })
           .catch(() => {})
 
