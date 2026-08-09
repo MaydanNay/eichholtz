@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, matchPath, useLocation, useNavigate } from 'react-router-dom'
 import CategoryNavPanel from './CategoryNavPanel'
 import CollectionsNavPanel from './CollectionsNavPanel'
 import MobileNavDrawer from './MobileNavDrawer'
@@ -8,8 +8,9 @@ import { searchProducts } from '../api/products'
 import { useAuth } from '../context/AuthContext'
 import { useFavorites } from '../context/FavoritesContext'
 import { useCart } from '../context/CartContext'
-import { categoryUrl } from '../utils/categoryUrl'
+import { categoryUrl, parseCategoryIdFromSlug } from '../utils/categoryUrl'
 import { productUrl } from '../utils/productUrl'
+import { parseCollectionIdFromSlug } from '../utils/collectionUrl'
 
 const CATEGORY_NAV_ROOTS = ['Мебель', 'Освещение', 'Аксессуары', 'Для улицы']
 const ROOT_NAME_ALIASES = {
@@ -133,6 +134,7 @@ export default function Header({
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [categoryRootsByName, setCategoryRootsByName] = useState({})
+  const [allCategories, setAllCategories] = useState([])
 
   const [isHidden, setIsHidden] = useState(false)
   const lastScrollYRef = useRef(0)
@@ -147,20 +149,59 @@ export default function Header({
     getCategories(true)
       .then((cats) => {
         if (cancelled) return
+        const list = cats || []
+        setAllCategories(list)
         const map = {}
         for (const name of CATEGORY_NAV_ROOTS) {
           const names = new Set(ROOT_NAME_ALIASES[name] || [name])
-          map[name] = (cats || []).find((c) => names.has(c.name) && c.parent_id == null) || null
+          map[name] = list.find((c) => names.has(c.name) && c.parent_id == null) || null
         }
         setCategoryRootsByName(map)
       })
       .catch(() => {
-        if (!cancelled) setCategoryRootsByName({})
+        if (!cancelled) {
+          setAllCategories([])
+          setCategoryRootsByName({})
+        }
       })
     return () => {
       cancelled = true
     }
   }, [])
+
+  const routeCategoryId = useMemo(() => {
+    const match = matchPath('/category/:categorySlug', location.pathname)
+    return parseCategoryIdFromSlug(match?.params?.categorySlug)
+  }, [location.pathname])
+
+  const routeCollectionId = useMemo(() => {
+    const match =
+      matchPath('/collection/:collectionSlug', location.pathname) ||
+      matchPath('/catalog/:collectionSlug', location.pathname)
+    return parseCollectionIdFromSlug(match?.params?.collectionSlug)
+  }, [location.pathname])
+
+  const routeCategoryRootName = useMemo(() => {
+    if (!routeCategoryId || allCategories.length === 0) return null
+    const byId = new Map(allCategories.map((c) => [c.id, c]))
+    let cur = byId.get(routeCategoryId)
+    while (cur?.parent_id != null) {
+      cur = byId.get(cur.parent_id)
+    }
+    if (!cur) return null
+    for (const name of CATEGORY_NAV_ROOTS) {
+      const names = ROOT_NAME_ALIASES[name] || [name]
+      if (names.includes(cur.name)) return name
+    }
+    return null
+  }, [routeCategoryId, allCategories])
+
+  const isNavItemActive = (item) => {
+    if (activePage === item.id) return true
+    if (item.rootName && routeCategoryRootName === item.rootName) return true
+    if (item.id === 'collections' && routeCollectionId) return true
+    return false
+  }
 
   useEffect(() => {
     setOpenMegaMenu(null)
@@ -522,7 +563,7 @@ export default function Header({
               >
                 <button
                   type="button"
-                  className={`header__nav-link header__nav-link--mega${activePage === item.id ? ' header__nav-link--active' : ''}${openMegaMenu === item.megaMenu ? ' header__nav-link--mega-open' : ''}`}
+                  className={`header__nav-link header__nav-link--mega${isNavItemActive(item) ? ' header__nav-link--active' : ''}${openMegaMenu === item.megaMenu ? ' header__nav-link--mega-open' : ''}`}
                   aria-expanded={openMegaMenu === item.megaMenu}
                   aria-controls={megaMenuControlsId(item.megaMenu)}
                   onClick={() => {
@@ -545,7 +586,7 @@ export default function Header({
               <button
                 key={item.id}
                 type="button"
-                className={`header__nav-link${activePage === item.id ? ' header__nav-link--active' : ''}${item.accent ? ' header__nav-link--accent' : ''}`}
+                className={`header__nav-link${isNavItemActive(item) ? ' header__nav-link--active' : ''}${item.accent ? ' header__nav-link--accent' : ''}`}
                 onClick={() => {
                   closeMegaMenu()
                   onNavigate(item.id)

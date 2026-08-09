@@ -7,10 +7,17 @@ import { buildBasicRowMenuItems } from './adminMenuItems'
 
 const STATUSES = [
   { value: 'new', label: 'Новый' },
-  { value: 'read', label: 'Прочитано' },
-  { value: 'accepted', label: 'Принят' },
-  { value: 'closed', label: 'Закрыт' },
+  { value: 'processing', label: 'В работе' },
+  { value: 'shipped', label: 'Отправлен' },
+  { value: 'completed', label: 'Завершён' },
+  { value: 'cancelled', label: 'Отменён' },
 ]
+
+const LEGACY_STATUS_LABELS = {
+  read: 'В работе',
+  accepted: 'В работе',
+  closed: 'Завершён',
+}
 
 const EMPTY = {
   customer_name: '',
@@ -22,7 +29,15 @@ const EMPTY = {
   notes: '',
 }
 
-const statusLabel = (value) => STATUSES.find((s) => s.value === value)?.label || value
+const statusLabel = (value) =>
+  STATUSES.find((s) => s.value === value)?.label || LEGACY_STATUS_LABELS[value] || value
+
+function normalizeStatusForForm(value) {
+  if (value === 'read' || value === 'accepted') return 'processing'
+  if (value === 'closed') return 'completed'
+  if (STATUSES.some((s) => s.value === value)) return value
+  return 'new'
+}
 
 function formatOrderItems(items) {
   if (!Array.isArray(items) || items.length === 0) return '—'
@@ -91,7 +106,7 @@ export default function OrdersPage() {
       customer_email: order.customer_email,
       customer_phone: order.customer_phone,
       items: JSON.stringify(order.items, null, 2),
-      status: order.status,
+      status: normalizeStatusForForm(order.status),
       total: order.total,
       notes: order.notes,
     })
@@ -142,17 +157,17 @@ export default function OrdersPage() {
     }
   }
 
-  const handleCloseOrder = async (order) => {
+  const handleMarkProcessing = async (order) => {
     setError('')
     try {
       await api.updateOrder(order.id, {
         customer_name: order.customer_name,
         customer_email: order.customer_email || '',
         customer_phone: order.customer_phone || '',
-        items: JSON.stringify(order.items || []),
-        status: 'read',
+        items: order.items || [],
+        status: 'processing',
         total: order.total || 0,
-        notes: order.notes || ''
+        notes: order.notes || '',
       })
       load()
     } catch (err) {
@@ -249,8 +264,8 @@ export default function OrdersPage() {
                   <AdminRowMenu
                     items={[
                       ...(o.status === 'new' ? [{
-                        label: 'Отметить как прочитанное',
-                        onClick: () => handleCloseOrder(o),
+                        label: 'Взять в работу',
+                        onClick: () => handleMarkProcessing(o),
                       }] : []),
                       ...buildBasicRowMenuItems({
                         onEdit: () => openEdit(o),

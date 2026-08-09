@@ -16,6 +16,7 @@ export default function CatalogPage({ onCartOpen }) {
   return (
     <ProductsCatalogSection
       onCartOpen={onCartOpen}
+      pageSize={48}
     />
   )
 }

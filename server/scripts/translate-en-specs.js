@@ -186,7 +186,7 @@ const VALUE_MAP = {
   Columns: 'Колонны',
   'Console tables': 'Консоли',
   'Deco accessories': 'Декор',
-  'Desk lamps': 'Настольные лампы',
+  'Desk lamps': 'Письменные лампы',
   Desks: 'Письменные столы',
   'Dining chairs': 'Обеденные стулья',
   'Dining tables': 'Обеденные столы',

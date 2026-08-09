@@ -1,11 +1,9 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState } from 'react'
 import { api } from './api'
 import AdminPageHeader from './AdminPageHeader'
 import CustomSelect from '../components/CustomSelect'
 import ImageUploadField from './ImageUploadField'
-import { Link } from 'react-router-dom'
 import HeroSection from '../sections/HeroSection'
-import CollectionSection from '../sections/CollectionSection'
 import {
   createEmptyHeroSlide,
   parseHeroSlides,
@@ -16,32 +14,22 @@ import { collectionUrl } from '../utils/collectionUrl'
 export default function AdminHomePage() {
   const [collections, setCollections] = useState([])
   const [heroSlides, setHeroSlides] = useState([])
-  const [expandedSeasons, setExpandedSeasons] = useState([])
-  const [seasons, setSeasons] = useState([])
-  const [settings, setSettings] = useState({ block2_title: 'Новые коллекции' })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
-  
-  const [editingBlock1, setEditingBlock1] = useState(false)
-  const [editingBlock2, setEditingBlock2] = useState(false)
+  const [editing, setEditing] = useState(false)
 
   const load = async () => {
     try {
-      const [colls, seas, sets] = await Promise.all([
+      const [colls, sets] = await Promise.all([
         api.getCollections({ kind: 'category' }),
-        api.getSeasons(),
-        api.getHomeSettings()
+        api.getHomeSettings(),
       ])
       setCollections(colls)
 
       const parsed = parseHeroSlides(sets.hero_slides)
       const legacy = slidesFromHeroCollections(colls)
-      // Empty/corrupt hero_slides → fall back to collections with hero_order
       setHeroSlides(parsed.length > 0 ? parsed : legacy)
-
-      setSeasons(seas)
-      setSettings(prev => ({ ...prev, ...sets }))
     } catch (err) {
       setError(err.message)
     } finally {
@@ -49,17 +37,13 @@ export default function AdminHomePage() {
     }
   }
 
-  useEffect(() => { load() }, [])
-
-  const handleCollectionChange = (id, field, value) => {
-    setCollections(collections.map(c => 
-      c.id === id ? { ...c, [field]: value } : c
-    ))
-  }
+  useEffect(() => {
+    load()
+  }, [])
 
   const updateHeroSlide = (index, patch) => {
     setHeroSlides((prev) =>
-      prev.map((slide, i) => (i === index ? { ...slide, ...patch } : slide))
+      prev.map((slide, i) => (i === index ? { ...slide, ...patch } : slide)),
     )
   }
 
@@ -90,59 +74,6 @@ export default function AdminHomePage() {
     setHeroSlides([...heroSlides, createEmptyHeroSlide()])
   }
 
-  const handleSeasonChange = (id, field, value) => {
-    setSeasons(seasons.map(s => 
-      s.id === id ? { ...s, [field]: value } : s
-    ))
-  }
-
-  const toggleSeason = (seasonId) => {
-    setExpandedSeasons(prev => 
-      prev.includes(seasonId) ? prev.filter(id => id !== seasonId) : [...prev, seasonId]
-    )
-  }
-
-  const dragItem = useRef(null)
-  const dragOverItem = useRef(null)
-
-  const handleDragStart = (e, type, index, id) => {
-    dragItem.current = { type, index, id }
-    e.dataTransfer.effectAllowed = 'move'
-    // Hack to make it look nicer
-    setTimeout(() => {
-      e.target.style.opacity = '0.5'
-    }, 0)
-  }
-
-  const handleDragEnter = (e, type, index) => {
-    if (dragItem.current && dragItem.current.type === type) {
-      dragOverItem.current = { type, index }
-    }
-  }
-
-  const handleDragEnd = (e, type) => {
-    e.target.style.opacity = '1'
-    if (dragItem.current && dragOverItem.current && dragItem.current.type === dragOverItem.current.type) {
-      if (dragItem.current.index !== dragOverItem.current.index) {
-        if (type === 'season') {
-          const newSeasons = [...seasons]
-          const dragged = newSeasons.splice(dragItem.current.index, 1)[0]
-          newSeasons.splice(dragOverItem.current.index, 0, dragged)
-          newSeasons.forEach((s, i) => s.sort_order = i)
-          setSeasons(newSeasons)
-        } else if (type === 'collection') {
-          const newCollections = [...collections]
-          const dragged = newCollections.splice(dragItem.current.index, 1)[0]
-          newCollections.splice(dragOverItem.current.index, 0, dragged)
-          newCollections.forEach((c, i) => c.sort_order = i)
-          setCollections(newCollections)
-        }
-      }
-    }
-    dragItem.current = null
-    dragOverItem.current = null
-  }
-
   const handleSave = async () => {
     setSaving(true)
     setError('')
@@ -154,75 +85,46 @@ export default function AdminHomePage() {
           title: (slide.title || '').trim(),
           image_url: (slide.image_url || '').trim(),
           link: (slide.link || '').trim(),
-          collection_id: slide.collection_id ? Number(slide.collection_id) || slide.collection_id : null,
+          collection_id: slide.collection_id
+            ? Number(slide.collection_id) || slide.collection_id
+            : null,
         }))
         .filter((slide) => slide.title || slide.image_url || slide.link)
 
-      if (editingBlock1 && slidesToSave.length === 0) {
+      if (slidesToSave.length === 0) {
         throw new Error('Добавьте хотя бы один слайд с заголовком, фото или ссылкой')
       }
 
-      const collectionsToSave = collections.map((c, idx) => {
-        let heroOrder = c.hero_order ?? null
-        if (editingBlock1) {
-          const heroIndex = slidesToSave.findIndex(
-            (s) => s.collection_id != null && String(s.collection_id) === String(c.id),
-          )
-          heroOrder = heroIndex !== -1 ? heroIndex + 1 : null
-        }
-        return {
-          id: c.id,
-          hero_order: heroOrder,
-          sort_order: c.sort_order !== undefined ? c.sort_order : idx,
-          show_on_home: !!c.show_on_home,
-        }
+      await api.saveHomeSettings({
+        hero_slides: JSON.stringify(slidesToSave),
       })
 
-      const settingsPayload = {
-        block2_title: settings.block2_title || 'Новые коллекции',
-      }
-      // Only rewrite hero slides when editing block 1
-      if (editingBlock1) {
-        settingsPayload.hero_slides = JSON.stringify(slidesToSave)
-      }
+      await Promise.allSettled(
+        slidesToSave
+          .filter((s) => s.collection_id && s.image_url)
+          .map((s) => {
+            const current = collections.find((c) => String(c.id) === String(s.collection_id))
+            if (!current || current.image_url === s.image_url) return Promise.resolve()
+            return api.updateCollection(s.collection_id, {
+              season_id: current.season_id,
+              parent_collection_id: current.parent_collection_id,
+              name: current.name,
+              description: current.description,
+              image_url: s.image_url,
+              pdf_url: current.pdf_url,
+              published: current.published,
+              sort_order: current.sort_order,
+              kind: current.kind,
+              show_on_home: current.show_on_home,
+              is_new: current.is_new,
+            })
+          }),
+      )
 
-      await api.saveHomeSettings(settingsPayload)
-      await api.saveHomeCollections(collectionsToSave)
-      await api.saveHomeSeasons(seasons.map((s, idx) => ({
-        id: s.id,
-        sort_order: s.sort_order !== undefined ? s.sort_order : idx,
-        show_on_home: !!s.show_on_home
-      })))
-
-      if (editingBlock1) {
-        await Promise.allSettled(
-          slidesToSave
-            .filter((s) => s.collection_id && s.image_url)
-            .map((s) => {
-              const current = collections.find((c) => String(c.id) === String(s.collection_id))
-              if (!current || current.image_url === s.image_url) return Promise.resolve()
-              return api.updateCollection(s.collection_id, {
-                season_id: current.season_id,
-                parent_collection_id: current.parent_collection_id,
-                name: current.name,
-                description: current.description,
-                image_url: s.image_url,
-                pdf_url: current.pdf_url,
-                published: current.published,
-                sort_order: current.sort_order,
-                kind: current.kind,
-                show_on_home: current.show_on_home,
-                is_new: current.is_new,
-              })
-            }),
-        )
-        setHeroSlides(slidesToSave)
-      }
-
+      setHeroSlides(slidesToSave)
       alert('Настройки сохранены')
       await load()
-      setEditingBlock1(false)
-      setEditingBlock2(false)
+      setEditing(false)
     } catch (err) {
       setError(err.message || 'Ошибка сохранения')
     } finally {
@@ -230,26 +132,49 @@ export default function AdminHomePage() {
     }
   }
 
-  if (loading) return <div className="admin-page"><p className="admin-muted">Загрузка...</p></div>
+  if (loading) {
+    return (
+      <div className="admin-page">
+        <p className="admin-muted">Загрузка...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="admin-page">
       <AdminPageHeader
         title="Главная страница"
-        hint="Управление блоками на главной странице сайта"
+        hint="Управление героем на главной. Категории во втором блоке сайта заданы в коде и здесь не редактируются."
       />
 
       {error && <p className="admin-error">{error}</p>}
-      
-      {!editingBlock1 ? (
+
+      {!editing ? (
         <div className="admin-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h2 style={{ margin: 0 }}>Блок 1: Автоскролл (Герой)</h2>
-            <button type="button" className="admin-btn admin-btn--primary" onClick={() => setEditingBlock1(true)}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '1.5rem',
+            }}
+          >
+            <h2 style={{ margin: 0 }}>Герой (автоскролл)</h2>
+            <button
+              type="button"
+              className="admin-btn admin-btn--primary"
+              onClick={() => setEditing(true)}
+            >
               Редактировать
             </button>
           </div>
-          <div style={{ border: '1px solid var(--color-ui-bg-light)', borderRadius: '8px', overflow: 'hidden' }}>
+          <div
+            style={{
+              border: '1px solid var(--color-ui-bg-light)',
+              borderRadius: '8px',
+              overflow: 'hidden',
+            }}
+          >
             <HeroSection
               isPreview={true}
               slidesOverride={heroSlides}
@@ -259,10 +184,11 @@ export default function AdminHomePage() {
         </div>
       ) : (
         <div className="admin-card">
-          <h2>Блок 1: Автоскролл (Герой)</h2>
+          <h2>Герой (автоскролл)</h2>
           <p className="admin-muted">
-            Для каждого слайда задайте надзаголовок, заголовок, фото и ссылку кнопки «Смотреть коллекцию».
-            Можно быстро заполнить поля из существующей коллекции и потом поправить вручную.
+            Для каждого слайда задайте надзаголовок, заголовок, фото и ссылку кнопки
+            «Смотреть коллекцию». Можно быстро заполнить поля из существующей коллекции
+            и потом поправить вручную.
           </p>
 
           <div className="admin-hero-slides">
@@ -340,178 +266,27 @@ export default function AdminHomePage() {
           </button>
 
           <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem' }}>
-            <button type="button" className="admin-btn admin-btn--primary" onClick={handleSave} disabled={saving}>
+            <button
+              type="button"
+              className="admin-btn admin-btn--primary"
+              onClick={handleSave}
+              disabled={saving}
+            >
               {saving ? 'Сохранение...' : 'Сохранить'}
             </button>
-            <button type="button" className="admin-btn" onClick={() => {
-              setEditingBlock1(false)
-              load()
-            }} disabled={saving}>
+            <button
+              type="button"
+              className="admin-btn"
+              onClick={() => {
+                setEditing(false)
+                load()
+              }}
+              disabled={saving}
+            >
               Отмена
             </button>
           </div>
         </div>
-      )}
-
-      {!editingBlock2 ? (
-        <div className="admin-card" style={{ marginTop: '2rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h2 style={{ margin: 0 }}>Блок 2: Коллекции / Сезоны</h2>
-            <button type="button" className="admin-btn admin-btn--primary" onClick={() => setEditingBlock2(true)}>
-              Редактировать
-            </button>
-          </div>
-          <div style={{ border: '1px solid var(--color-ui-bg-light)', borderRadius: '8px', overflow: 'hidden' }}>
-            <CollectionSection isPreview={true} />
-          </div>
-        </div>
-      ) : (
-        <div className="admin-card" style={{ marginTop: '2rem' }}>
-          <h2>Блок 2: Настройки блока</h2>
-        <div className="admin-field admin-field--full" style={{ marginBottom: '1rem' }}>
-          <span>Заголовок над переключателем сезонов</span>
-          <input 
-            type="text" 
-            value={settings.block2_title || ''}
-            onChange={e => setSettings(s => ({ ...s, block2_title: e.target.value }))}
-            placeholder="Например: Новые коллекции"
-          />
-        </div>
-
-        <h2>Сезоны и коллекции на главной</h2>
-        <p className="admin-muted" style={{ marginBottom: '1rem' }}>
-          Выберите сезоны, а внутри них — коллекции, которые будут отображаться во втором блоке.
-          Нажмите на строку сезона, чтобы раскрыть список его коллекций. 
-          Потяните за иконку слева (☰), чтобы изменить порядок.
-        </p>
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th style={{ width: '60px', textAlign: 'center' }}>Порядок</th>
-              <th style={{ width: '40px' }}></th>
-              <th style={{ width: '30px' }}></th>
-              <th>Название</th>
-              <th style={{ width: '80px', textAlign: 'center' }}>Показ</th>
-            </tr>
-          </thead>
-          <tbody>
-            {seasons.map((s, sIndex) => {
-              const isExpanded = expandedSeasons.includes(s.id)
-              const seasonCollections = collections.filter(c => c.season_id === s.id)
-              
-              return (
-                <React.Fragment key={s.id}>
-                  <tr 
-                    style={{ backgroundColor: 'var(--color-ui-bg-light)', cursor: 'pointer' }} 
-                    onClick={() => toggleSeason(s.id)}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, 'season', sIndex, s.id)}
-                    onDragEnter={(e) => handleDragEnter(e, 'season', sIndex)}
-                    onDragEnd={(e) => handleDragEnd(e, 'season')}
-                    onDragOver={(e) => e.preventDefault()}
-                  >
-                    <td style={{ textAlign: 'center', color: 'var(--color-core-dark-grey)', fontSize: '0.9rem' }}>{sIndex + 1}</td>
-                    <td onClick={e => e.stopPropagation()} style={{ cursor: 'grab', color: 'var(--color-core-light-grey)', textAlign: 'center' }}>
-                      ☰
-                    </td>
-                    <td style={{ color: 'var(--color-core-dark-grey)', fontSize: '0.8rem', textAlign: 'center' }}>
-                      <span style={{ 
-                        display: 'inline-block', 
-                        transform: isExpanded ? 'rotate(90deg)' : 'none', 
-                        transition: 'transform 0.2s' 
-                      }}>
-                        ▶
-                      </span>
-                    </td>
-                    <td>{s.name}</td>
-                    <td onClick={e => e.stopPropagation()} style={{ textAlign: 'center' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={s.show_on_home || false}
-                        onChange={e => handleSeasonChange(s.id, 'show_on_home', e.target.checked)}
-                      />
-                    </td>
-                  </tr>
-                  
-                  {isExpanded && seasonCollections.map((c, cLocalIndex) => {
-                    const cIndex = collections.findIndex(col => col.id === c.id)
-                    return (
-                      <tr 
-                        key={c.id}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, 'collection', cIndex, c.id)}
-                        onDragEnter={(e) => handleDragEnter(e, 'collection', cIndex)}
-                        onDragEnd={(e) => handleDragEnd(e, 'collection')}
-                        onDragOver={(e) => e.preventDefault()}
-                      >
-                        <td style={{ textAlign: 'center', color: 'var(--color-core-dark-grey)', fontSize: '0.85rem', paddingLeft: '1.5rem' }}>{cLocalIndex + 1}</td>
-                        <td style={{ cursor: 'grab', color: 'var(--color-core-light-grey)', textAlign: 'center' }}>
-                          ☰
-                        </td>
-                        <td></td>
-                        <td>
-                          <Link 
-                            to={`/admin/collections/${c.id}`} 
-                            style={{ color: 'inherit', textDecoration: 'underline' }}
-                            onClick={e => e.stopPropagation()}
-                          >
-                            {c.name}
-                          </Link>
-                        </td>
-                        <td style={{ textAlign: 'center' }}>
-                          <input 
-                            type="checkbox" 
-                            checked={c.show_on_home || false}
-                            onChange={e => handleCollectionChange(c.id, 'show_on_home', e.target.checked)}
-                          />
-                        </td>
-                      </tr>
-                    )
-                  })}
-                  
-                  {isExpanded && seasonCollections.length === 0 && (
-                    <tr>
-                      <td></td>
-                      <td></td>
-                      <td></td>
-                      <td colSpan="2" className="admin-muted" style={{ fontStyle: 'italic', paddingBottom: '0.5rem' }}>
-                        Нет коллекций в этом сезоне
-                      </td>
-                    </tr>
-                  )}
-                  {isExpanded && (
-                    <tr>
-                      <td></td>
-                      <td></td>
-                      <td></td>
-                      <td colSpan="2" style={{ paddingTop: seasonCollections.length === 0 ? '0' : '0.5rem', paddingBottom: '1rem' }}>
-                        <Link to="/admin/collections" style={{ fontSize: '0.85rem', color: 'var(--color-core-dark-grey)', textDecoration: 'underline' }}>
-                          + Добавить коллекцию
-                        </Link>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              )
-            })}
-          </tbody>
-        </table>
-
-        <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem' }}>
-          <button type="button" className="admin-btn admin-btn--primary" onClick={handleSave} disabled={saving}>
-            {saving ? 'Сохранение...' : 'Сохранить'}
-          </button>
-          <Link to="/admin/collections" className="admin-btn">
-            + Добавить сезон
-          </Link>
-          <button type="button" className="admin-btn" onClick={() => {
-            setEditingBlock2(false)
-            load()
-          }} disabled={saving}>
-            Отмена
-          </button>
-        </div>
-      </div>
       )}
     </div>
   )

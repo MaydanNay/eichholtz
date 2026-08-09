@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, matchPath, useLocation } from 'react-router-dom'
 import { getCollections, getSeasons } from '../api/collections'
-import { collectionUrl } from '../utils/collectionUrl'
+import { collectionUrl, parseCollectionIdFromSlug } from '../utils/collectionUrl'
 
 const CATALOG_SEASON_NAME = 'Каталоги'
 
 export default function CollectionsNavPanel({ isOpen, onClose }) {
+  const location = useLocation()
   const [collections, setCollections] = useState([])
   const [seasonId, setSeasonId] = useState(null)
-  const [activeId, setActiveId] = useState(null)
+  const [previewId, setPreviewId] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -44,13 +45,25 @@ export default function CollectionsNavPanel({ isOpen, onClose }) {
     return collections.filter((c) => String(c.season_id) === String(seasonId))
   }, [collections, seasonId])
 
-  useEffect(() => {
-    setActiveId(menuItems[0]?.id ?? null)
-  }, [menuItems])
+  const routeCollectionId = useMemo(() => {
+    const match =
+      matchPath('/collection/:collectionSlug', location.pathname) ||
+      matchPath('/catalog/:collectionSlug', location.pathname)
+    return parseCollectionIdFromSlug(match?.params?.collectionSlug)
+  }, [location.pathname])
 
-  const activeCollection = useMemo(
-    () => menuItems.find((c) => c.id === activeId) ?? null,
-    [menuItems, activeId],
+  useEffect(() => {
+    if (!isOpen) return
+    if (routeCollectionId && menuItems.some((c) => c.id === routeCollectionId)) {
+      setPreviewId(routeCollectionId)
+      return
+    }
+    setPreviewId(menuItems[0]?.id ?? null)
+  }, [menuItems, isOpen, routeCollectionId])
+
+  const previewCollection = useMemo(
+    () => menuItems.find((c) => c.id === previewId) ?? null,
+    [menuItems, previewId],
   )
 
   return (
@@ -68,36 +81,41 @@ export default function CollectionsNavPanel({ isOpen, onClose }) {
           <div className="header__collections-layout">
             <div className="header__collections-seasons">
               <ul className="header__collections-season-list">
-                {menuItems.map((collection) => (
-                  <li key={collection.id}>
-                    <Link
-                      to={collectionUrl(collection)}
-                      className={`header__collections-season-btn${
-                        activeId === collection.id ? ' header__collections-season-btn--active' : ''
-                      }`}
-                      onMouseEnter={() => setActiveId(collection.id)}
-                      onFocus={() => setActiveId(collection.id)}
-                      onClick={onClose}
-                      tabIndex={isOpen ? 0 : -1}
-                    >
-                      {collection.name}
-                    </Link>
-                  </li>
-                ))}
+                {menuItems.map((collection) => {
+                  const isPreview = previewId === collection.id
+                  const isCurrent = routeCollectionId === collection.id
+                  return (
+                    <li key={collection.id}>
+                      <Link
+                        to={collectionUrl(collection)}
+                        className={`header__collections-season-btn${
+                          isPreview ? ' header__collections-season-btn--active' : ''
+                        }${isCurrent ? ' header__collections-season-btn--current' : ''}`}
+                        aria-current={isCurrent ? 'page' : undefined}
+                        onMouseEnter={() => setPreviewId(collection.id)}
+                        onFocus={() => setPreviewId(collection.id)}
+                        onClick={onClose}
+                        tabIndex={isOpen ? 0 : -1}
+                      >
+                        {collection.name}
+                      </Link>
+                    </li>
+                  )
+                })}
               </ul>
             </div>
 
             <div className="header__collections-promo">
-              {activeCollection && (
+              {previewCollection && (
                 <Link
-                  to={collectionUrl(activeCollection)}
+                  to={collectionUrl(previewCollection)}
                   className="header__collections-promo-link"
                   onClick={onClose}
                   tabIndex={isOpen ? 0 : -1}
                 >
-                  {activeCollection.image_url ? (
+                  {previewCollection.image_url ? (
                     <img
-                      src={activeCollection.image_url}
+                      src={previewCollection.image_url}
                       alt=""
                       className="header__collections-promo-img"
                     />
@@ -105,7 +123,7 @@ export default function CollectionsNavPanel({ isOpen, onClose }) {
                     <div className="header__collections-promo-img header__collections-promo-img--empty" />
                   )}
                   <span className="header__collections-promo-caption">
-                    {activeCollection.name}
+                    {previewCollection.name}
                   </span>
                 </Link>
               )}

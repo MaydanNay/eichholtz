@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit'
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
 
 const rateLimitMessage = { error: 'Слишком много попыток. Попробуйте позже.' }
 
@@ -24,4 +24,17 @@ export const authMeLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: rateLimitMessage,
+})
+
+/** 5 заявок на пользователя (или IP) за 15 минут */
+export const inquiryLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Слишком много заявок. Попробуйте через 15 минут.' },
+  keyGenerator: (req) => {
+    if (req.user?.id) return `inquiry:user:${req.user.id}`
+    return `inquiry:ip:${ipKeyGenerator(req.ip)}`
+  },
 })

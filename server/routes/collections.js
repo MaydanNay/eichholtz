@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { query } from '../db.js'
-import { requireAdmin } from '../middleware/auth.js'
+import { isAdminRequest, requireAdmin } from '../middleware/auth.js'
 
 const router = Router()
 
@@ -49,7 +49,7 @@ router.get('/', async (req, res) => {
     const conditions = []
     const params = []
 
-    if (published === '1') {
+    if (published === '1' || (!isAdminRequest(req) && published !== '0')) {
       params.push(true)
       conditions.push(`c.published = $${params.length}`)
     }
@@ -98,6 +98,9 @@ router.get('/:id', async (req, res) => {
       [req.params.id],
     )
     if (!rows[0]) return res.status(404).json({ error: 'Коллекция не найдена' })
+    if (!rows[0].published && !isAdminRequest(req)) {
+      return res.status(404).json({ error: 'Коллекция не найдена' })
+    }
     res.json(rows[0])
   } catch {
     res.status(500).json({ error: 'Ошибка сервера' })

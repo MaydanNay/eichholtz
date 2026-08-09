@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, matchPath, useLocation } from 'react-router-dom'
 import { getCategories } from '../api/categories'
-import { categoryUrl } from '../utils/categoryUrl'
+import { categoryUrl, parseCategoryIdFromSlug } from '../utils/categoryUrl'
 
 /** Display name in nav → possible DB root names */
 const ROOT_NAME_ALIASES = {
@@ -25,9 +25,22 @@ function findRootCategory(categories, rootName) {
   return categories.find((c) => names.has(c.name) && c.parent_id == null) || null
 }
 
+function buildAncestorIds(categories, categoryId) {
+  const byId = new Map(categories.map((c) => [c.id, c]))
+  const ids = new Set()
+  let cur = byId.get(categoryId)
+  while (cur) {
+    ids.add(cur.id)
+    if (cur.parent_id == null) break
+    cur = byId.get(cur.parent_id)
+  }
+  return ids
+}
+
 export default function CategoryNavPanel({ rootName, isOpen, onClose }) {
+  const location = useLocation()
   const [categories, setCategories] = useState([])
-  const [activeChildId, setActiveChildId] = useState(null)
+  const [previewChildId, setPreviewChildId] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -56,22 +69,44 @@ export default function CategoryNavPanel({ rootName, isOpen, onClose }) {
     return sortCategories(categories.filter((c) => c.parent_id === root.id))
   }, [categories, root])
 
+  const routeCategoryId = useMemo(() => {
+    const match = matchPath('/category/:categorySlug', location.pathname)
+    return parseCategoryIdFromSlug(match?.params?.categorySlug)
+  }, [location.pathname])
+
+  const routeAncestorIds = useMemo(() => {
+    if (!routeCategoryId) return new Set()
+    return buildAncestorIds(categories, routeCategoryId)
+  }, [categories, routeCategoryId])
+
+  const routeChildId = useMemo(() => {
+    if (!root || routeAncestorIds.size === 0) return null
+    if (!routeAncestorIds.has(root.id)) return null
+    const child = children.find((c) => routeAncestorIds.has(c.id))
+    return child?.id ?? null
+  }, [root, children, routeAncestorIds])
+
   useEffect(() => {
+    if (!isOpen) return
+    if (routeChildId) {
+      setPreviewChildId(routeChildId)
+      return
+    }
     const firstWithKids = children.find((c) => categories.some((x) => x.parent_id === c.id))
-    setActiveChildId(firstWithKids?.id ?? children[0]?.id ?? null)
-  }, [children, categories, isOpen])
+    setPreviewChildId(firstWithKids?.id ?? children[0]?.id ?? null)
+  }, [children, categories, isOpen, routeChildId])
 
   const grandchildren = useMemo(() => {
-    if (!activeChildId) return []
-    return sortCategories(categories.filter((c) => c.parent_id === activeChildId))
-  }, [categories, activeChildId])
+    if (!previewChildId) return []
+    return sortCategories(categories.filter((c) => c.parent_id === previewChildId))
+  }, [categories, previewChildId])
 
-  const activeChild = useMemo(
-    () => children.find((c) => c.id === activeChildId) ?? null,
-    [children, activeChildId],
+  const previewChild = useMemo(
+    () => children.find((c) => c.id === previewChildId) ?? null,
+    [children, previewChildId],
   )
 
-  const promoCategory = activeChild || root
+  const promoCategory = previewChild || root
   const promoImage = ROOT_PROMO_IMAGES[rootName] || root?.image_url || promoCategory?.image_url || null
   const panelId = `category-menu-${String(rootName || '')
     .toLowerCase()
@@ -95,15 +130,18 @@ export default function CategoryNavPanel({ rootName, isOpen, onClose }) {
                 <ul className="header__collections-season-list">
                   {children.map((child) => {
                     const hasKids = categories.some((c) => c.parent_id === child.id)
+                    const isPreview = previewChildId === child.id
+                    const isCurrent = routeAncestorIds.has(child.id)
                     return (
                       <li key={child.id}>
                         <Link
                           to={categoryUrl(child)}
                           className={`header__collections-season-btn${hasKids ? ' header__category-parent-btn' : ''}${
-                            activeChildId === child.id ? ' header__collections-season-btn--active' : ''
-                          }`}
-                          onMouseEnter={() => setActiveChildId(child.id)}
-                          onFocus={() => setActiveChildId(child.id)}
+                            isPreview ? ' header__collections-season-btn--active' : ''
+                          }${isCurrent ? ' header__collections-season-btn--current' : ''}`}
+                          aria-current={routeCategoryId === child.id ? 'page' : undefined}
+                          onMouseEnter={() => setPreviewChildId(child.id)}
+                          onFocus={() => setPreviewChildId(child.id)}
                           onClick={onClose}
                           tabIndex={isOpen ? 0 : -1}
                         >
@@ -133,18 +171,24 @@ export default function CategoryNavPanel({ rootName, isOpen, onClose }) {
               {grandchildren.length > 0 && (
                 <div className="header__collections-seasons">
                   <ul className="header__collections-season-list">
-                    {grandchildren.map((item) => (
-                      <li key={item.id}>
-                        <Link
-                          to={categoryUrl(item)}
-                          className="header__collections-season-btn"
-                          onClick={onClose}
-                          tabIndex={isOpen ? 0 : -1}
-                        >
-                          {item.name}
-                        </Link>
-                      </li>
-                    ))}
+                    {grandchildren.map((item) => {
+                      const isCurrent = routeAncestorIds.has(item.id)
+                      return (
+                        <li key={item.id}>
+                          <Link
+                            to={categoryUrl(item)}
+                            className={`header__collections-season-btn${
+                              isCurrent ? ' header__collections-season-btn--current' : ''
+                            }`}
+                            aria-current={routeCategoryId === item.id ? 'page' : undefined}
+                            onClick={onClose}
+                            tabIndex={isOpen ? 0 : -1}
+                          >
+                            {item.name}
+                          </Link>
+                        </li>
+                      )
+                    })}
                   </ul>
                 </div>
               )}

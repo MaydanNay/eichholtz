@@ -223,10 +223,6 @@ export default function CollectionsPage() {
               <span>Опубликовано на сайте</span>
             </label>
             <label className="admin-field admin-field--checkbox">
-              <input type="checkbox" checked={form.show_on_home} onChange={(e) => setForm({ ...form, show_on_home: e.target.checked })} />
-              <span>Показывать на главной</span>
-            </label>
-            <label className="admin-field admin-field--checkbox">
               <input type="checkbox" checked={form.is_new} onChange={(e) => setForm({ ...form, is_new: e.target.checked })} />
               <span>Новинка</span>
             </label>
@@ -252,7 +248,6 @@ export default function CollectionsPage() {
               <th>Сезон</th>
               <th>Порядок</th>
               <th>Новинка</th>
-              <th>Главная</th>
               <th>Статус</th>
               <th></th>
             </tr>
@@ -271,7 +266,6 @@ export default function CollectionsPage() {
                 <td>{c.season_name || '—'}</td>
                 <td>{c.sort_order}</td>
                 <td>{c.is_new ? 'Да' : '—'}</td>
-                <td>{c.show_on_home ? 'Да' : '—'}</td>
                 <td>
                   <span className={`admin-badge ${c.published ? 'admin-badge--completed' : 'admin-badge--unpublished'}`}>
                     {c.published ? 'Опубликована' : 'Не опубликована'}

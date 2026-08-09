@@ -1,30 +1,50 @@
 import { Router } from 'express'
-import jwt from 'jsonwebtoken'
 import { query } from '../db.js'
-import { requireAdmin } from '../middleware/auth.js'
+import { isAdminRequest, requireAdmin } from '../middleware/auth.js'
 
 const router = Router()
 
-function isAdminRequest(req) {
-  const header = req.headers.authorization
-  if (!header?.startsWith('Bearer ')) return false
-
-  try {
-    const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET)
-    return payload.role === 'admin'
-  } catch {
-    return false
+function parseSpecsObject(input) {
+  if (!input) return {}
+  if (typeof input === 'string') {
+    try {
+      const parsed = JSON.parse(input)
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+    } catch {
+      return {}
+    }
   }
+  if (typeof input === 'object' && !Array.isArray(input)) return { ...input }
+  return {}
 }
 
-function normalizeSpecs(input) {
-  if (!input || typeof input !== 'object') return {}
-  const specs = {}
-  for (const key of Object.keys(input)) {
-    const value = String(input[key] || '').trim()
-    if (value) specs[key] = value
+/** Normalize one incoming specs patch value. Empty string → clear (null sentinel). */
+function normalizeSpecPatchValue(value) {
+  if (value == null) return null
+  if (Array.isArray(value) || (typeof value === 'object' && value !== null)) return value
+  const text = String(value).trim()
+  return text === '' ? null : text
+}
+
+/**
+ * Merge specs patch into existing. Keys present in `incoming` update/clear;
+ * other existing keys (sku, extra_categories, etc.) are preserved.
+ */
+function mergeSpecs(existing, incoming) {
+  const base = parseSpecsObject(existing)
+  if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) return base
+  const next = { ...base }
+  for (const [key, raw] of Object.entries(incoming)) {
+    const value = normalizeSpecPatchValue(raw)
+    if (value == null) delete next[key]
+    else next[key] = value
   }
-  return specs
+  return next
+}
+
+/** Full replace for create — still keeps arrays/objects intact. */
+function normalizeSpecs(input) {
+  return mergeSpecs({}, input)
 }
 
 function parseImages(value) {
@@ -216,6 +236,11 @@ async function buildProductFilters(req) {
   if (req.query.published === '1') {
     params.push(true)
     clauses.push(`p.published = $${params.length}`)
+  } else if (!isAdminRequest(req)) {
+    // Public catalog must never leak unpublished items — including when
+    // category/collection/search filters are present (old bug: only applied
+    // when clauses were otherwise empty).
+    clauses.push('p.published = true')
   }
 
   if (collection_id) {
@@ -248,21 +273,23 @@ async function buildProductFilters(req) {
         params.push(Number(id))
         return `$${params.length}`
       })
-      const extraChecks = ids.map((id) => {
-        params.push(Number(id))
-        return `p.specs->'extra_categories' @> to_jsonb($${params.length}::int)`
-      })
-      clauses.push(`(
-          p.category_id IN (
+      // Dual membership: match primary category OR extras against the full
+      // requested subtree (parent + descendants). Checking only the root id
+      // for extras drops products tagged solely on leaf extras (e.g. Bedroom).
+      const treeSql = `
             WITH RECURSIVE cat_tree AS (
               SELECT id FROM categories WHERE id IN (${placeholders.join(', ')})
               UNION ALL
               SELECT c.id FROM categories c
               INNER JOIN cat_tree ct ON c.parent_id = ct.id
             )
-            SELECT id FROM cat_tree
+            SELECT id FROM cat_tree`
+      clauses.push(`(
+          p.category_id IN (${treeSql})
+          OR EXISTS (
+            SELECT 1 FROM (${treeSql}) tree_ids
+            WHERE p.specs->'extra_categories' @> to_jsonb(tree_ids.id)
           )
-          OR ${extraChecks.join(' OR ')}
         )`)
     }
   }
@@ -312,10 +339,6 @@ async function buildProductFilters(req) {
       return `$${params.length}`
     })
     clauses.push(buildSpecValueMatchSql(keyPlaceholder, valuePlaceholders, values, params))
-  }
-
-  if (clauses.length === 0 && req.query.published === undefined && !isAdminRequest(req)) {
-    clauses.push('p.published = true')
   }
 
   const whereSql = clauses.length > 0 ? ` WHERE ${clauses.join(' AND ')}` : ''
@@ -532,8 +555,8 @@ router.put('/:id', requireAdmin, async (req, res) => {
       : (category ?? e.category)
 
     const nextSpecs = specs !== undefined
-      ? JSON.stringify(normalizeSpecs(specs))
-      : e.specs
+      ? JSON.stringify(mergeSpecs(e.specs, specs))
+      : (typeof e.specs === 'string' ? e.specs : JSON.stringify(e.specs || {}))
 
     const hasImagesInput = req.body.images !== undefined || req.body.image_url !== undefined
     const nextImages = hasImagesInput

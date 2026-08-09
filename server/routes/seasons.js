@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { query } from '../db.js'
-import { requireAdmin } from '../middleware/auth.js'
+import { isAdminRequest, requireAdmin } from '../middleware/auth.js'
 
 const router = Router()
 
@@ -8,7 +8,9 @@ router.get('/', async (req, res) => {
   try {
     const { published, show_on_home } = req.query
     let text = 'SELECT * FROM seasons WHERE 1=1'
-    if (published === '1') text += ' AND published = true'
+    if (published === '1' || (!isAdminRequest(req) && published !== '0')) {
+      text += ' AND published = true'
+    }
     if (show_on_home === '1') text += ' AND show_on_home = true'
     text += ' ORDER BY sort_order ASC, created_at DESC'
 
@@ -23,6 +25,9 @@ router.get('/:id', async (req, res) => {
   try {
     const { rows } = await query('SELECT * FROM seasons WHERE id = $1', [req.params.id])
     if (!rows[0]) return res.status(404).json({ error: 'Сезон не найден' })
+    if (!rows[0].published && !isAdminRequest(req)) {
+      return res.status(404).json({ error: 'Сезон не найден' })
+    }
     res.json(rows[0])
   } catch {
     res.status(500).json({ error: 'Ошибка сервера' })

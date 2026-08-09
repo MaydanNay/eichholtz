@@ -15,12 +15,15 @@ const EMPTY = {
   price: '',
   category: '',
   category_id: '',
+  extra_categories: [],
   images: [],
   collection_id: '',
   catalog_id: '',
   in_stock: true,
   published: true,
-  variation: '',
+  sku: '',
+  product_group: '',
+  finish: '',
   height: '',
   diameter: '',
   width: '',
@@ -48,21 +51,89 @@ function productSku(product) {
   return String(specs.sku || '').trim()
 }
 
+/** Form fields are strings; arrays (multi color/material) → stable join for selects/filters. */
+function specFieldToForm(value) {
+  if (value == null || value === '') return ''
+  if (Array.isArray(value)) {
+    return value.map((v) => String(v).trim()).filter(Boolean).join(' | ')
+  }
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return ''
+    }
+  }
+  return String(value)
+}
+
+function productExtraCategoryIds(product) {
+  const raw = productSpecs(product).extra_categories
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((v) => Number(v))
+    .filter((n) => Number.isFinite(n))
+}
+
+function flattenCategoriesTree(categories) {
+  const byParent = new Map()
+  for (const cat of categories) {
+    const parent = cat.parent_id == null ? null : Number(cat.parent_id)
+    if (!byParent.has(parent)) byParent.set(parent, [])
+    byParent.get(parent).push(cat)
+  }
+  for (const list of byParent.values()) {
+    list.sort(
+      (a, b) =>
+        (a.sort_order ?? 0) - (b.sort_order ?? 0) ||
+        String(a.name || '').localeCompare(String(b.name || ''), 'ru'),
+    )
+  }
+
+  const result = []
+  const seen = new Set()
+  const walk = (parentId, depth) => {
+    for (const node of byParent.get(parentId) || []) {
+      const id = Number(node.id)
+      if (seen.has(id)) continue
+      seen.add(id)
+      result.push({ ...node, depth })
+      walk(id, depth + 1)
+    }
+  }
+  walk(null, 0)
+
+  for (const cat of categories) {
+    const id = Number(cat.id)
+    if (!seen.has(id)) result.push({ ...cat, depth: 0 })
+  }
+  return result
+}
+
 function specsFromProduct(product) {
   const specs = productSpecs(product)
+  const finish = specs.finish || specs.variation || ''
   return {
-    variation: specs.variation || '',
-    height: specs.height || '',
-    diameter: specs.diameter || '',
-    width: specs.width || '',
-    depth: specs.depth || '',
-    material: specs.material || '',
-    color: specs.color || '',
-    fabric: specs.fabric || '',
+    sku: specFieldToForm(specs.sku),
+    product_group: specFieldToForm(specs.product_group),
+    finish: specFieldToForm(finish),
+    height: specFieldToForm(specs.height),
+    diameter: specFieldToForm(specs.diameter),
+    width: specFieldToForm(specs.width),
+    depth: specFieldToForm(specs.depth),
+    material: specFieldToForm(specs.material),
+    color: specFieldToForm(specs.color),
+    fabric: specFieldToForm(specs.fabric),
+    extra_categories: productExtraCategoryIds(product).map(String),
   }
 }
 
 function buildPayload(form) {
+  const primaryId = form.category_id ? Number(form.category_id) : null
+  const extraCategories = (form.extra_categories || [])
+    .map((v) => Number(v))
+    .filter((n) => Number.isFinite(n) && n !== primaryId)
+
   return {
     name: form.name,
     description: form.description,
@@ -72,11 +143,15 @@ function buildPayload(form) {
     image_url: form.images[0] || '',
     collection_id: form.collection_id ? Number(form.collection_id) : null,
     catalog_id: form.catalog_id ? Number(form.catalog_id) : null,
-    category_id: form.category_id ? Number(form.category_id) : null,
+    category_id: primaryId,
     in_stock: form.in_stock,
     published: form.published,
+    // Partial specs patch — server merges into existing (keeps sku extras etc. if omitted,
+    // but we send sku/product_group/finish/extra_categories explicitly so they stay editable)
     specs: {
-      variation: form.variation,
+      sku: form.sku,
+      product_group: form.product_group,
+      finish: form.finish,
       height: form.height,
       diameter: form.diameter,
       width: form.width,
@@ -84,6 +159,7 @@ function buildPayload(form) {
       material: form.material,
       color: form.color,
       fabric: form.fabric,
+      extra_categories: extraCategories,
     },
   }
 }
@@ -134,9 +210,12 @@ function categorySubtreeIds(categories, rootId) {
 
 function matchesCategoryFilter(product, filterCategoryId, categories) {
   if (!filterCategoryId) return true
-  if (filterCategoryId === 'none') return !product.category_id
+  if (filterCategoryId === 'none') {
+    return !product.category_id && productExtraCategoryIds(product).length === 0
+  }
   const allowed = categorySubtreeIds(categories, filterCategoryId)
-  return allowed.has(Number(product.category_id))
+  if (allowed.has(Number(product.category_id))) return true
+  return productExtraCategoryIds(product).some((id) => allowed.has(id))
 }
 
 function matchesCollectionFilter(product, filterCollectionId, collections) {
@@ -228,6 +307,21 @@ export default function ProductsPage() {
     () => [...categories].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ru')),
     [categories],
   )
+
+  const categoryTreeOptions = useMemo(
+    () => flattenCategoriesTree(categories),
+    [categories],
+  )
+
+  const toggleExtraCategory = (categoryId) => {
+    const sid = String(categoryId)
+    setForm((current) => {
+      const selected = new Set((current.extra_categories || []).map(String))
+      if (selected.has(sid)) selected.delete(sid)
+      else selected.add(sid)
+      return { ...current, extra_categories: [...selected] }
+    })
+  }
 
   const sortedCollections = useMemo(
     () => [...collections].sort((a, b) => {
@@ -330,18 +424,21 @@ export default function ProductsPage() {
 
   const openEdit = (product) => {
     const images = imagesFromProduct(product)
+    const specsFields = specsFromProduct(product)
+    const primaryId = product.category_id ? String(product.category_id) : ''
     setForm({
       name: product.name,
       description: product.description,
       price: product.price,
       category: product.category,
       images,
-      category_id: product.category_id || '',
+      category_id: primaryId,
       collection_id: product.collection_id || '',
       catalog_id: product.catalog_id || '',
       in_stock: !!product.in_stock,
       published: !!product.published,
-      ...specsFromProduct(product),
+      ...specsFields,
+      extra_categories: (specsFields.extra_categories || []).filter((id) => id !== primaryId),
     })
     setEditingId(product.id)
     galleryUpload.initEdit(images)
@@ -502,17 +599,89 @@ export default function ProductsPage() {
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
             </label>
             <label className="admin-field">
-              <span>Категория</span>
+              <span>SKU</span>
+              <input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
+            </label>
+            <label className="admin-field">
+              <span>Группа товаров</span>
+              <input
+                value={form.product_group}
+                onChange={(e) => setForm({ ...form, product_group: e.target.value })}
+                placeholder="например: Искусственные цветы и зелень"
+              />
+            </label>
+            <label className="admin-field">
+              <span>Основная категория</span>
               <select
                 value={form.category_id}
-                onChange={(e) => setForm({ ...form, category_id: e.target.value })}
+                onChange={(e) => {
+                  const nextId = e.target.value
+                  setForm({
+                    ...form,
+                    category_id: nextId,
+                    extra_categories: (form.extra_categories || []).filter((id) => id !== nextId),
+                  })
+                }}
               >
                 <option value="">Без категории</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                {categoryTreeOptions.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {`${'— '.repeat(c.depth || 0)}${c.name}`}
+                  </option>
                 ))}
               </select>
             </label>
+            <div className="admin-field admin-field--full">
+              <span>Доп. категории (extra)</span>
+              <p className="admin-muted" style={{ margin: '0 0 0.5rem' }}>
+                Товар также будет виден в выбранных разделах каталога (кроме основной).
+              </p>
+              <div
+                style={{
+                  maxHeight: '220px',
+                  overflow: 'auto',
+                  border: '1px solid var(--color-ui-bg-light, #e5e5e5)',
+                  borderRadius: '6px',
+                  padding: '0.5rem 0.75rem',
+                  background: 'var(--color-core-white, #fff)',
+                }}
+              >
+                {categoryTreeOptions.length === 0 ? (
+                  <span className="admin-muted">Категорий пока нет</span>
+                ) : (
+                  categoryTreeOptions.map((c) => {
+                    const sid = String(c.id)
+                    const isPrimary = sid === String(form.category_id)
+                    const checked = (form.extra_categories || []).includes(sid)
+                    return (
+                      <label
+                        key={c.id}
+                        className="admin-field admin-field--checkbox"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          paddingLeft: `${(c.depth || 0) * 16}px`,
+                          marginBottom: '0.35rem',
+                          opacity: isPrimary ? 0.5 : 1,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isPrimary || checked}
+                          disabled={isPrimary}
+                          onChange={() => toggleExtraCategory(c.id)}
+                        />
+                        <span>
+                          {c.name}
+                          {isPrimary ? ' (основная)' : ''}
+                        </span>
+                      </label>
+                    )
+                  })
+                )}
+              </div>
+            </div>
             <label className="admin-field">
               <span>Коллекция</span>
               <select
@@ -565,7 +734,7 @@ export default function ProductsPage() {
             </label>
             <label className="admin-field">
               <span>Отделка</span>
-              <select value={form.variation} onChange={(e) => setForm({ ...form, variation: e.target.value })}>
+              <select value={form.finish} onChange={(e) => setForm({ ...form, finish: e.target.value })}>
                 <option value="">Без отделки</option>
                 {(productAttributes?.finish?.options || []).map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.value}</option>

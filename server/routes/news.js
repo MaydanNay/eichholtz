@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { query } from '../db.js'
-import { requireAdmin } from '../middleware/auth.js'
+import { isAdminRequest, requireAdmin } from '../middleware/auth.js'
 
 const router = Router()
 
@@ -8,7 +8,9 @@ router.get('/', async (req, res) => {
   try {
     const { published } = req.query
     let text = 'SELECT * FROM news'
-    if (published === '1') text += ' WHERE published = true'
+    if (published === '1' || (!isAdminRequest(req) && published !== '0')) {
+      text += ' WHERE published = true'
+    }
     text += ' ORDER BY created_at DESC'
 
     const { rows } = await query(text)
@@ -22,6 +24,9 @@ router.get('/:id', async (req, res) => {
   try {
     const { rows } = await query('SELECT * FROM news WHERE id = $1', [req.params.id])
     if (!rows[0]) return res.status(404).json({ error: 'Новость не найдена' })
+    if (!rows[0].published && !isAdminRequest(req)) {
+      return res.status(404).json({ error: 'Новость не найдена' })
+    }
     res.json(rows[0])
   } catch {
     res.status(500).json({ error: 'Ошибка сервера' })
@@ -62,7 +67,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
         title ?? e.title,
         content ?? e.content,
         image_url ?? e.image_url,
-        published !== undefined ? published : e.published,
+        published !== undefined ? !!published : e.published,
         req.params.id,
       ],
     )

@@ -41,6 +41,7 @@ export function usePageMeta({
   path,
   type = 'website',
   enabled = true,
+  noindex = false,
 }) {
   useEffect(() => {
     if (!enabled) return undefined
@@ -61,6 +62,13 @@ export function usePageMeta({
     upsertMeta('name', 'twitter:title', fullTitle)
     upsertMeta('name', 'twitter:description', description)
 
+    if (noindex) {
+      upsertMeta('name', 'robots', 'noindex, nofollow')
+    } else {
+      const robots = document.head.querySelector('meta[name="robots"]')
+      if (robots) robots.remove()
+    }
+
     if (pageUrl) {
       upsertMeta('property', 'og:url', pageUrl)
       upsertLink('canonical', pageUrl)
@@ -72,7 +80,7 @@ export function usePageMeta({
     }
 
     return undefined
-  }, [title, description, image, path, type, enabled])
+  }, [title, description, image, path, type, enabled, noindex])
 }
 
 export { DEFAULT_DESCRIPTION, SITE_NAME }

@@ -12,7 +12,7 @@ import { productUrl } from '../utils/productUrl'
 import ProductCard from '../components/ProductCard'
 import { SPEC_LABELS, translateSpecValue, getSpecLabel } from '../utils/specLabels'
 
-const PAGE_SIZE = 12
+const DEFAULT_PAGE_SIZE = 12
 
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Сперва новые' },
@@ -49,7 +49,11 @@ export default function ProductsCatalogSection({
   onClearSearchQuery,
   onCartOpen,
   hideSidebar = false,
+  pageSize = DEFAULT_PAGE_SIZE,
 }) {
+  const PAGE_SIZE = Number.isFinite(Number(pageSize)) && Number(pageSize) > 0
+    ? Math.min(48, Math.floor(Number(pageSize)))
+    : DEFAULT_PAGE_SIZE
   const [products, setProducts] = useState([])
   const [totalProducts, setTotalProducts] = useState(0)
   const [categoriesList, setCategoriesList] = useState([])
@@ -275,7 +279,7 @@ export default function ProductsCatalogSection({
     return () => {
       cancelled = true
     }
-  }, [collectionFilter, catalogFilter, categoryFilter, localCategoryFilters, searchQuery, currentPage, sortValue, selectedSpecs])
+  }, [collectionFilter, catalogFilter, categoryFilter, localCategoryFilters, searchQuery, currentPage, sortValue, selectedSpecs, PAGE_SIZE])
 
   // Clear spec filters when category or collection changes
   useEffect(() => {
@@ -285,7 +289,7 @@ export default function ProductsCatalogSection({
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchQuery])
+  }, [searchQuery, PAGE_SIZE])
 
   const toggleSpecValue = (specKey, value) => {
     setSelectedSpecs(prev => {
@@ -507,7 +511,15 @@ export default function ProductsCatalogSection({
                         {isExpanded && (
                           <div className="products-catalog__spec-values">
                             {Object.entries(spec.values)
-                              .sort((a, b) => translateSpecValue(a[0]).localeCompare(translateSpecValue(b[0])))
+                              .sort((a, b) => {
+                                // Match original: higher facet counts first, then A→Z
+                                const byCount = (Number(b[1]) || 0) - (Number(a[1]) || 0)
+                                if (byCount !== 0) return byCount
+                                return translateSpecValue(a[0]).localeCompare(
+                                  translateSpecValue(b[0]),
+                                  'ru',
+                                )
+                              })
                               .map(([value, count]) => {
                               const isSelected = selectedSpecs[spec.originalKey]?.includes(value)
                               let swatchBg = null
@@ -602,6 +614,8 @@ export default function ProductsCatalogSection({
                   className="products-catalog__grid reveal-stagger"
                   variant="up"
                   delay={80}
+                  threshold={0}
+                  rootMargin="0px"
                 >
                   {shown.map((product, index) => (
                     <ProductCard

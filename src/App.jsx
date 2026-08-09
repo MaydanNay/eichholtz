@@ -25,6 +25,7 @@ import CategoryPage from './pages/CategoryPage'
 import ProductPage from './pages/ProductPage'
 import AccountPage from './pages/AccountPage'
 import ContactsPage from './pages/ContactsPage'
+import NotFoundPage from './pages/NotFoundPage'
 import { parseProductIdFromSlug } from './utils/productUrl'
 import { parseCollectionIdFromSlug } from './utils/collectionUrl'
 import { parseCategoryIdFromSlug } from './utils/categoryUrl'
@@ -66,7 +67,7 @@ function resolveNavPage(pathname, overlayPage) {
   if (pathname === '/contract/branded-residences') return 'contract'
   if (pathname === '/contacts') return 'contacts'
   if (pathname === '/account') return 'account'
-  return 'home'
+  return null
 }
 
 function App() {
@@ -303,13 +304,17 @@ function App() {
       return <ContactsPage />
     }
 
-    return (
-      <HomePage
-        onNavigate={handleNavigate}
-        onOpenNews={handleOpenNews}
-        onCartOpen={() => setIsCartOpen(true)}
-      />
-    )
+    if (location.pathname === '/') {
+      return (
+        <HomePage
+          onNavigate={handleNavigate}
+          onOpenNews={handleOpenNews}
+          onCartOpen={() => setIsCartOpen(true)}
+        />
+      )
+    }
+
+    return <NotFoundPage />
   }
 
   return (

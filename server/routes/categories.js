@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { query } from '../db.js'
-import { requireAdmin } from '../middleware/auth.js'
+import { isAdminRequest, requireAdmin } from '../middleware/auth.js'
 
 const router = Router()
 
@@ -36,7 +36,7 @@ router.get('/', async (req, res) => {
       `
     }
 
-    if (published === '1') {
+    if (published === '1' || (!isAdminRequest(req) && published !== '0')) {
       text += (collection_id ? ' AND c.published = true' : ' WHERE published = true')
     }
 
@@ -53,6 +53,9 @@ router.get('/:id', async (req, res) => {
   try {
     const { rows } = await query('SELECT * FROM categories WHERE id = $1', [req.params.id])
     if (!rows[0]) return res.status(404).json({ error: 'Категория не найдена' })
+    if (!rows[0].published && !isAdminRequest(req)) {
+      return res.status(404).json({ error: 'Категория не найдена' })
+    }
     res.json(rows[0])
   } catch {
     res.status(500).json({ error: 'Ошибка сервера' })

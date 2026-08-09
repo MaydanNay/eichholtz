@@ -1,11 +1,12 @@
 import { Router } from 'express'
 import { query } from '../db.js'
 import { optionalCustomer } from '../middleware/auth.js'
+import { inquiryLimiter } from '../middleware/authRateLimit.js'
 import { upsertClient } from '../lib/clients.js'
 
 const router = Router()
 
-router.post('/', optionalCustomer, async (req, res) => {
+router.post('/', optionalCustomer, inquiryLimiter, async (req, res) => {
   const { name, email, phone, product_name, message, items, total } = req.body
 
   if (!name?.trim()) return res.status(400).json({ error: 'Пожалуйста, заполните имя' })

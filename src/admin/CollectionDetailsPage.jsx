@@ -273,10 +273,6 @@ export default function CollectionDetailsPage() {
               <span>Опубликовано на сайте</span>
             </label>
             <label className="admin-field admin-field--checkbox">
-              <input type="checkbox" checked={form.show_on_home} onChange={(e) => setForm({ ...form, show_on_home: e.target.checked })} />
-              <span>Показывать на главной</span>
-            </label>
-            <label className="admin-field admin-field--checkbox">
               <input type="checkbox" checked={form.is_new} onChange={(e) => setForm({ ...form, is_new: e.target.checked })} />
               <span>Новинка (показывать в меню)</span>
             </label>
@@ -323,9 +319,6 @@ export default function CollectionDetailsPage() {
                 {collection.published ? 'Опубликована' : 'Не опубликована'}
               </span>
             </div>
-            
-            <div style={{ color: 'var(--color-core-dark-grey)' }}>На главной:</div>
-            <div>{collection.show_on_home ? 'Да' : 'Нет'}</div>
             
             <div style={{ color: 'var(--color-core-dark-grey)' }}>Новинка:</div>
             <div>{collection.is_new ? 'Да' : 'Нет'}</div>

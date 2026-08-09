@@ -1,5 +1,17 @@
 import jwt from 'jsonwebtoken'
 
+export function isAdminRequest(req) {
+  const header = req.headers.authorization
+  if (!header?.startsWith('Bearer ')) return false
+
+  try {
+    const payload = jwt.verify(header.slice(7), process.env.JWT_SECRET)
+    return payload.role === 'admin'
+  } catch {
+    return false
+  }
+}
+
 export function requireAuth(req, res, next) {
   const header = req.headers.authorization
   if (!header?.startsWith('Bearer ')) {
