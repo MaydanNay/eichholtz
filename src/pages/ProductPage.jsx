@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { getProduct, getProducts } from '../api/products'
 import AddToCartButton from '../components/AddToCartButton'
 import FavoriteButton from '../components/FavoriteButton'
+import ProductCollectionBadges from '../components/ProductCollectionBadges'
 import PriceInquiryForm from '../components/PriceInquiryForm'
 import Reveal from '../components/Reveal'
 import { usePageMeta } from '../hooks/usePageMeta'
@@ -261,6 +262,7 @@ export default function ProductPage({ productId, onCartOpen, onCheckout }) {
             ) : (
               <div className="product-page__image product-page__image--placeholder" />
             )}
+            <ProductCollectionBadges product={product} className="product-collection-badges--page" />
             <FavoriteButton product={product} className="product-page__favorite" />
           </div>
           {galleryImages.length > 1 && (

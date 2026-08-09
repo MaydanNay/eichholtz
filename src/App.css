@@ -3800,6 +3800,57 @@
   z-index: 2;
 }
 
+.product-collection-badges {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  pointer-events: none;
+}
+
+.product-collection-badges__img {
+  display: block;
+  width: 88px;
+  height: auto;
+  max-width: 38%;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.12));
+}
+
+.product-collection-badges__img--corey-damen-jenkins {
+  width: 80px;
+}
+
+.product-collection-badges--page .product-collection-badges__img {
+  width: 112px;
+}
+
+.product-collection-badges--page .product-collection-badges__img--corey-damen-jenkins {
+  width: 100px;
+}
+
+@media (max-width: 640px) {
+  .product-collection-badges__img {
+    width: 68px;
+  }
+
+  .product-collection-badges__img--corey-damen-jenkins {
+    width: 60px;
+  }
+
+  .product-collection-badges--page .product-collection-badges__img {
+    width: 84px;
+  }
+
+  .product-collection-badges--page .product-collection-badges__img--corey-damen-jenkins {
+    width: 76px;
+  }
+}
+
 .favorite-btn:hover {
   color: var(--color-core-black);
   transform: scale(1.05);

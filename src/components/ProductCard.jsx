@@ -4,6 +4,7 @@ import { productUrl } from '../utils/productUrl'
 import { useProductGalleryImages } from '../utils/useProductGalleryImages'
 import FavoriteButton from './FavoriteButton'
 import AddToCartButton from './AddToCartButton'
+import ProductCollectionBadges from './ProductCollectionBadges'
 
 export default function ProductCard({ product, style, onCartOpen }) {
   const images = useProductGalleryImages(product)
@@ -58,6 +59,7 @@ export default function ProductCard({ product, style, onCartOpen }) {
           )}
         </Link>
 
+        <ProductCollectionBadges product={product} />
         <FavoriteButton product={product} />
       </div>
       
