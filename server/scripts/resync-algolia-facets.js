@@ -42,6 +42,13 @@ const VALUE_MAP = {
   Paper: 'Бумага',
   Travertine: 'Травертин',
   Resin: 'Смола',
+  'Faux rattan': 'Искусственный ротанг',
+  Fiberglass: 'Стекловолокно',
+  Wool: 'Шерсть',
+  'Horn/bone': 'Рог/кость',
+  'Horn/bone look': 'Под рог/кость',
+  'Leather look': 'Экокожа',
+  Raffia: 'Рафия',
 
   Gold: 'Золотой',
   'Antique gold': 'Античное золото',
