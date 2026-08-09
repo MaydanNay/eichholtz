@@ -108,6 +108,11 @@ function App() {
     }
   }, [location.pathname])
 
+  // SPA: keep scroll at top on route change (footer links otherwise leave you at the bottom)
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [location.pathname])
+
   const handleCatalogItemClick = (item) => {
     setOverlayPage(null)
 
