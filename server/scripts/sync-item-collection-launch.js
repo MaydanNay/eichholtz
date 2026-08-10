@@ -3,7 +3,8 @@
  * - specs.item_collection_launch
  * - specs.objectID (if missing)
  * - specs.algolia_nav_available (In Stock / Almost in Stock / Out of Stock)
- * - specs.algolia_promoted_in: string[] of level1 paths where the SKU is a leading pin
+ * - specs.algolia_pin_rank: { [algoliaPath]: 1-based position }
+ * - specs.algolia_promoted_in: string[] of paths (compat / debugging)
  *
  * Usage: node server/scripts/sync-item-collection-launch.js
  */
@@ -14,11 +15,47 @@ const INDEX = 'live_magento2_en_products'
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
-const ROOT_LEVEL1 = [
-  'Collection /// Furniture',
-  'Collection /// Lighting',
-  'Collection /// Accessories',
-  'Collection /// Outdoor',
+/**
+ * Ranking sources for Relevance-like sort.
+ * - mode "prefix": only consecutive leading Query Rule pins (big category roots)
+ * - mode "full": entire Algolia browse order (collections with mid-list pins)
+ */
+const PIN_QUERIES = [
+  {
+    path: 'Collection /// Furniture',
+    facetFilters: [['categories.level1:Collection /// Furniture']],
+    mode: 'prefix',
+  },
+  {
+    path: 'Collection /// Lighting',
+    facetFilters: [['categories.level1:Collection /// Lighting']],
+    mode: 'prefix',
+  },
+  {
+    path: 'Collection /// Accessories',
+    facetFilters: [['categories.level1:Collection /// Accessories']],
+    mode: 'prefix',
+  },
+  {
+    path: 'Collection /// Outdoor',
+    facetFilters: [['categories.level1:Collection /// Outdoor']],
+    mode: 'prefix',
+  },
+  {
+    path: 'Collection /// New /// New Arrivals',
+    facetFilters: [['categories.level2:Collection /// New /// New Arrivals']],
+    mode: 'full',
+  },
+  {
+    path: 'Collection /// New /// January 2026 Collection',
+    facetFilters: [['categories.level2:Collection /// New /// January 2026 Collection']],
+    mode: 'full',
+  },
+  {
+    path: 'Collection /// New /// Corey Damen Jenkins',
+    facetFilters: [['categories.level2:Collection /// New /// Corey Damen Jenkins']],
+    mode: 'full',
+  },
 ]
 
 async function getApiKey() {
@@ -93,36 +130,65 @@ async function collectFromLevel2(key) {
 }
 
 /**
- * Map sku -> Set of level1 paths where the SKU is a *leading* Query Rule pin.
- * Algolia can also pin items mid-list (still rankingInfo.promoted=true); those must
- * NOT float to the top — only the consecutive promoted prefix matches Relevance.
+ * Map sku -> { [path]: 1-based rank }.
+ * prefix: consecutive promoted hits from the start only.
+ * full: entire Algolia result order for that facet (needed when pins are mid-list).
  */
-async function collectPromotedByPath(key) {
-  const promotedBySku = new Map()
-  for (const path of ROOT_LEVEL1) {
-    const data = await algoliaQuery(key, {
-      query: '',
-      hitsPerPage: 50,
-      page: 0,
-      facetFilters: [[`categories.level1:${path}`]],
-      attributesToRetrieve: ['sku'],
-      getRankingInfo: true,
-      analytics: false,
+async function collectPinRanksByPath(key) {
+  const ranksBySku = new Map()
+  for (const { path, facetFilters, mode = 'prefix' } of PIN_QUERIES) {
+    const ordered = []
+    if (mode === 'full') {
+      for (let page = 0; page < 40; page += 1) {
+        const data = await algoliaQuery(key, {
+          query: '',
+          hitsPerPage: 50,
+          page,
+          facetFilters,
+          attributesToRetrieve: ['sku'],
+          getRankingInfo: true,
+          analytics: false,
+        })
+        for (const hit of data.hits || []) {
+          const sku = String(hit.sku || '').trim()
+          if (sku) ordered.push(sku)
+        }
+        if (page + 1 >= (data.nbPages || 0)) break
+      }
+    } else {
+      let stop = false
+      for (let page = 0; page < 20 && !stop; page += 1) {
+        const data = await algoliaQuery(key, {
+          query: '',
+          hitsPerPage: 50,
+          page,
+          facetFilters,
+          attributesToRetrieve: ['sku'],
+          getRankingInfo: true,
+          analytics: false,
+        })
+        for (const hit of data.hits || []) {
+          if (!(hit._rankingInfo || {}).promoted) {
+            stop = true
+            break
+          }
+          const sku = String(hit.sku || '').trim()
+          if (!sku) {
+            stop = true
+            break
+          }
+          ordered.push(sku)
+        }
+        if (page + 1 >= (data.nbPages || 0)) break
+      }
+    }
+    console.log(`${mode} ranks ${path}: ${ordered.length}`, ordered.slice(0, 8))
+    ordered.forEach((sku, index) => {
+      if (!ranksBySku.has(sku)) ranksBySku.set(sku, {})
+      ranksBySku.get(sku)[path] = index + 1
     })
-    const prefix = []
-    for (const hit of data.hits || []) {
-      if (!(hit._rankingInfo || {}).promoted) break
-      const sku = String(hit.sku || '').trim()
-      if (!sku) break
-      prefix.push(sku)
-    }
-    console.log(`prefix pins ${path}:`, prefix)
-    for (const sku of prefix) {
-      if (!promotedBySku.has(sku)) promotedBySku.set(sku, new Set())
-      promotedBySku.get(sku).add(path)
-    }
   }
-  return promotedBySku
+  return ranksBySku
 }
 
 async function patchSpec(sku, patch) {
@@ -138,7 +204,7 @@ async function patchSpec(sku, patch) {
 
 async function main() {
   await initDb()
-  console.log('=== SYNC Algolia sort metadata (path-scoped pins) ===')
+  console.log('=== SYNC Algolia sort metadata (path-scoped pin ranks) ===')
   const key = await getApiKey()
 
   const { launchBySku, objectIdBySku, navBySku } = await collectFromLevel2(key)
@@ -149,18 +215,17 @@ async function main() {
   for (const v of navBySku.values()) navCounts[v] = (navCounts[v] || 0) + 1
   console.log('nav_available counts', navCounts)
 
-  const promotedBySku = await collectPromotedByPath(key)
-  console.log(
-    `promoted SKUs: ${promotedBySku.size}`,
-    [...promotedBySku.entries()].slice(0, 12).map(([sku, paths]) => [sku, [...paths]]),
-  )
+  const ranksBySku = await collectPinRanksByPath(key)
+  console.log(`pinned SKUs: ${ranksBySku.size}`)
 
-  // Drop legacy global flag; reset path-scoped pins (re-applied below)
+  // Reset pin metadata; re-applied below for current leading pins only.
   await query(
     `UPDATE products
-     SET specs = (specs - 'algolia_promoted' - 'algolia_promoted_in'),
+     SET specs = (specs - 'algolia_promoted' - 'algolia_promoted_in' - 'algolia_pin_rank'),
          updated_at = NOW()
-     WHERE specs ? 'algolia_promoted' OR specs ? 'algolia_promoted_in'`,
+     WHERE specs ? 'algolia_promoted'
+        OR specs ? 'algolia_promoted_in'
+        OR specs ? 'algolia_pin_rank'`,
   )
 
   let updated = 0
@@ -168,7 +233,7 @@ async function main() {
     ...launchBySku.keys(),
     ...objectIdBySku.keys(),
     ...navBySku.keys(),
-    ...promotedBySku.keys(),
+    ...ranksBySku.keys(),
   ])
   let i = 0
   for (const sku of skus) {
@@ -177,7 +242,11 @@ async function main() {
     if (launchBySku.has(sku)) patch.item_collection_launch = launchBySku.get(sku)
     if (objectIdBySku.has(sku)) patch.objectID = objectIdBySku.get(sku)
     if (navBySku.has(sku)) patch.algolia_nav_available = navBySku.get(sku)
-    if (promotedBySku.has(sku)) patch.algolia_promoted_in = [...promotedBySku.get(sku)]
+    if (ranksBySku.has(sku)) {
+      const ranks = ranksBySku.get(sku)
+      patch.algolia_pin_rank = ranks
+      patch.algolia_promoted_in = Object.keys(ranks)
+    }
     if (!Object.keys(patch).length) continue
     updated += await patchSpec(sku, patch)
     if (i % 500 === 0) console.log(`… ${i}/${skus.size}`)
@@ -188,6 +257,7 @@ async function main() {
        count(*) FILTER (WHERE specs ? 'item_collection_launch') AS with_launch,
        count(*) FILTER (WHERE specs ? 'objectID') AS with_oid,
        count(*) FILTER (WHERE specs->>'algolia_nav_available' = 'Out of Stock') AS oos,
+       count(*) FILTER (WHERE specs ? 'algolia_pin_rank') AS with_pin_rank,
        count(*) FILTER (WHERE specs ? 'algolia_promoted_in') AS with_pins,
        count(*) FILTER (WHERE specs ? 'algolia_promoted') AS legacy_promo,
        count(*) AS total

@@ -47,6 +47,9 @@ const EXCLUDED_SPECS = [
   'specifications',
   'item_collection_launch',
   'algolia_promoted',
+  'algolia_promoted_in',
+  'algolia_pin_rank',
+  'algolia_nav_available',
 ]
 
 export default function ProductsCatalogSection({

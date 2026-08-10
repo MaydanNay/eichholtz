@@ -167,6 +167,7 @@ const FACET_EXCLUDED_SPECS = new Set([
   'item_collection_launch',
   'algolia_promoted',
   'algolia_promoted_in',
+  'algolia_pin_rank',
   'algolia_nav_available',
 ])
 
@@ -175,6 +176,19 @@ const ALGOLIA_PATH_BY_ROOT_ID = {
   585: 'Collection /// Lighting',
   595: 'Collection /// Accessories',
   578: 'Collection /// Outdoor',
+}
+
+/** Collection pages that use Algolia Relevance order (level2 paths). */
+const ALGOLIA_PATH_BY_COLLECTION_ID = {
+  124: 'Collection /// New /// New Arrivals',
+  125: 'Collection /// New /// January 2026 Collection',
+  128: 'Collection /// New /// Corey Damen Jenkins',
+}
+
+const ALGOLIA_PATH_BY_COLLECTION_NAME = {
+  'New Arrivals': 'Collection /// New /// New Arrivals',
+  'January 2026 Collection': 'Collection /// New /// January 2026 Collection',
+  'Corey Damen Jenkins': 'Collection /// New /// Corey Damen Jenkins',
 }
 
 const SORT_SQL = {
@@ -208,7 +222,7 @@ function algoliaStockOrderExpr() {
     END) ASC`
 }
 
-/** Pins are category-scoped (Algolia Query Rules), not global. */
+/** Pins are path-scoped with stable positions (Algolia Query Rules). */
 function buildOrderSql(sortKey, params, promotedPath) {
   if (sortKey !== 'newest' && sortKey !== 'oldest') {
     return SORT_SQL[sortKey] || SORT_SQL.price_asc
@@ -217,9 +231,13 @@ function buildOrderSql(sortKey, params, promotedPath) {
   const parts = []
   if (promotedPath) {
     params.push(promotedPath)
-    // jsonb_exists: avoid `?` operator (and keep ORDER BY bind params off COUNT/facets).
+    const pathParam = `$${params.length}`
+    // Pinned block first on newest / last on oldest; within block keep Algolia pin order.
     parts.push(
-      `(CASE WHEN jsonb_exists(COALESCE(p.specs->'algolia_promoted_in', '[]'::jsonb), $${params.length}) THEN 1 ELSE 0 END) ${dir}`,
+      `(CASE WHEN COALESCE(p.specs->'algolia_pin_rank'->>${pathParam}, '') ~ '^[0-9]+$' THEN 1 ELSE 0 END) ${dir}`,
+    )
+    parts.push(
+      `(CASE WHEN COALESCE(p.specs->'algolia_pin_rank'->>${pathParam}, '') ~ '^[0-9]+$' THEN (p.specs->'algolia_pin_rank'->>${pathParam})::int ELSE NULL END) ASC NULLS LAST`,
     )
   }
   // Stock preference is always "available first", even for oldest.
@@ -243,6 +261,24 @@ async function resolveAlgoliaPathForCategoryFilter(categoryIdQuery) {
     id = Number(parentId)
   }
   return ALGOLIA_PATH_BY_ROOT_ID[id] || null
+}
+
+async function resolveAlgoliaPathForCollectionFilter(collectionIdQuery) {
+  if (!collectionIdQuery) return null
+  const id = Number(collectionIdQuery)
+  if (Number.isFinite(id) && ALGOLIA_PATH_BY_COLLECTION_ID[id]) {
+    return ALGOLIA_PATH_BY_COLLECTION_ID[id]
+  }
+  if (!Number.isFinite(id)) return null
+  const { rows } = await query('SELECT name FROM collections WHERE id = $1', [id])
+  const name = String(rows[0]?.name || '').trim()
+  return ALGOLIA_PATH_BY_COLLECTION_NAME[name] || null
+}
+
+async function resolveAlgoliaPromotedPath(req) {
+  const fromCategory = await resolveAlgoliaPathForCategoryFilter(req.query.category_id)
+  if (fromCategory) return fromCategory
+  return resolveAlgoliaPathForCollectionFilter(req.query.collection_id)
 }
 
 
@@ -430,7 +466,7 @@ router.get('/', async (req, res) => {
       ? rawSort
       : 'newest'
     const promotedPath = (sortKey === 'newest' || sortKey === 'oldest')
-      ? await resolveAlgoliaPathForCategoryFilter(req.query.category_id)
+      ? await resolveAlgoliaPromotedPath(req)
       : null
     // ORDER BY may bind an extra pin-path param; keep filter `params` clean for COUNT/facets.
     const listParams = [...params]
