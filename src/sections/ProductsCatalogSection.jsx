@@ -14,6 +14,16 @@ import { SPEC_LABELS, translateSpecValue, getSpecLabel } from '../utils/specLabe
 
 const DEFAULT_PAGE_SIZE = 12
 
+/** Sidebar facet order (Категории are rendered separately above). */
+const SPEC_FACET_ORDER = [
+  'fabric',
+  'finish',
+  'material',
+  'product_group',
+  'color',
+  'shape',
+]
+
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Сперва новые' },
   { value: 'price_asc', label: 'Цена: по возрастанию' },
@@ -35,6 +45,8 @@ const EXCLUDED_SPECS = [
   'dimensions',
   'extra_categories',
   'specifications',
+  'item_collection_launch',
+  'algolia_promoted',
 ]
 
 export default function ProductsCatalogSection({
@@ -264,7 +276,14 @@ export default function ProductsCatalogSection({
               originalKey: key,
               values: values || {},
             }))
-            .sort((a, b) => a.label.localeCompare(b.label))
+            .sort((a, b) => {
+              const ai = SPEC_FACET_ORDER.indexOf(a.originalKey)
+              const bi = SPEC_FACET_ORDER.indexOf(b.originalKey)
+              if (ai === -1 && bi === -1) return a.label.localeCompare(b.label, 'ru')
+              if (ai === -1) return 1
+              if (bi === -1) return -1
+              return ai - bi
+            })
           setAvailableSpecs(specsList)
         }
       })

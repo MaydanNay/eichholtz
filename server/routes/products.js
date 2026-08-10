@@ -164,16 +164,87 @@ const FACET_EXCLUDED_SPECS = new Set([
   'dimensions',
   'extra_categories',
   'specifications',
+  'item_collection_launch',
+  'algolia_promoted',
+  'algolia_promoted_in',
+  'algolia_nav_available',
 ])
 
+const ALGOLIA_PATH_BY_ROOT_ID = {
+  551: 'Collection /// Furniture',
+  585: 'Collection /// Lighting',
+  595: 'Collection /// Accessories',
+  578: 'Collection /// Outdoor',
+}
+
 const SORT_SQL = {
-  newest: 'p.created_at DESC NULLS LAST, p.id DESC',
-  oldest: 'p.created_at ASC NULLS LAST, p.id ASC',
   price_asc: 'p.price ASC NULLS LAST, p.id DESC',
   price_desc: 'p.price DESC NULLS LAST, p.id DESC',
   name_asc: 'p.name ASC NULLS LAST, p.id DESC',
   name_desc: 'p.name DESC NULLS LAST, p.id DESC',
 }
+
+function launchOrderExpr(dir) {
+  return `CASE
+      WHEN COALESCE(p.specs->>'item_collection_launch', '') ~ '^[0-9]+$'
+      THEN (p.specs->>'item_collection_launch')::bigint
+      ELSE NULL
+    END ${dir} NULLS LAST`
+}
+
+function objectIdOrderExpr(dir) {
+  return `CASE
+      WHEN COALESCE(p.specs->>'objectID', p.specs->>'objectid', '') ~ '^[0-9]+$'
+      THEN COALESCE(p.specs->>'objectID', p.specs->>'objectid')::bigint
+      ELSE NULL
+    END ${dir} NULLS LAST`
+}
+
+/** Algolia customRanking starts with stock; OOS sinks. Local p.in_stock is untouched. */
+function algoliaStockOrderExpr() {
+  return `(CASE
+      WHEN COALESCE(p.specs->>'algolia_nav_available', '') = 'Out of Stock' THEN 1
+      ELSE 0
+    END) ASC`
+}
+
+/** Pins are category-scoped (Algolia Query Rules), not global. */
+function buildOrderSql(sortKey, params, promotedPath) {
+  if (sortKey !== 'newest' && sortKey !== 'oldest') {
+    return SORT_SQL[sortKey] || SORT_SQL.price_asc
+  }
+  const dir = sortKey === 'newest' ? 'DESC' : 'ASC'
+  const parts = []
+  if (promotedPath) {
+    params.push(promotedPath)
+    // jsonb_exists: avoid `?` operator (and keep ORDER BY bind params off COUNT/facets).
+    parts.push(
+      `(CASE WHEN jsonb_exists(COALESCE(p.specs->'algolia_promoted_in', '[]'::jsonb), $${params.length}) THEN 1 ELSE 0 END) ${dir}`,
+    )
+  }
+  // Stock preference is always "available first", even for oldest.
+  parts.push(algoliaStockOrderExpr())
+  parts.push(launchOrderExpr(dir))
+  parts.push(objectIdOrderExpr(dir))
+  parts.push(`p.created_at ${dir} NULLS LAST`)
+  parts.push(`p.id ${dir}`)
+  return parts.join(',\n    ')
+}
+
+async function resolveAlgoliaPathForCategoryFilter(categoryIdQuery) {
+  if (!categoryIdQuery) return null
+  let id = Number(String(categoryIdQuery).split(',')[0])
+  if (!Number.isFinite(id)) return null
+  for (let depth = 0; depth < 12; depth += 1) {
+    if (ALGOLIA_PATH_BY_ROOT_ID[id]) return ALGOLIA_PATH_BY_ROOT_ID[id]
+    const { rows } = await query('SELECT parent_id FROM categories WHERE id = $1', [id])
+    const parentId = rows[0]?.parent_id
+    if (parentId == null) break
+    id = Number(parentId)
+  }
+  return ALGOLIA_PATH_BY_ROOT_ID[id] || null
+}
+
 
 /** Specs sometimes store multi-values as JSON arrays: ["Стекло","Металл"]. */
 function expandSpecFacetValues(raw) {
@@ -354,8 +425,16 @@ router.get('/', async (req, res) => {
     const wantsPagination = Number.isFinite(pageNum) && pageNum > 0
     const limitNum = Number(limit)
     const hasSearch = search.length > 0
-    const sortKey = SORT_SQL[String(sort || '')] ? String(sort) : 'newest'
-    const orderSql = SORT_SQL[sortKey]
+    const rawSort = String(sort || 'newest')
+    const sortKey = ['newest', 'oldest', 'price_asc', 'price_desc', 'name_asc', 'name_desc'].includes(rawSort)
+      ? rawSort
+      : 'newest'
+    const promotedPath = (sortKey === 'newest' || sortKey === 'oldest')
+      ? await resolveAlgoliaPathForCategoryFilter(req.query.category_id)
+      : null
+    // ORDER BY may bind an extra pin-path param; keep filter `params` clean for COUNT/facets.
+    const listParams = [...params]
+    const orderSql = buildOrderSql(sortKey, listParams, promotedPath)
 
     let limitClause = ''
     let offsetClause = ''
@@ -378,7 +457,7 @@ router.get('/', async (req, res) => {
 
     const selectSql = wantsPagination ? PRODUCT_LIST_SELECT : PRODUCT_SELECT
     const text = `${selectSql}${whereSql} ORDER BY ${orderSql}${limitClause}${offsetClause}`
-    const { rows } = await query(text, params)
+    const { rows } = await query(text, listParams)
     const items = rows.map(normalizeProduct)
 
     if (!wantsPagination) {
