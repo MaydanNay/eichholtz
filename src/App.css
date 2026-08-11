@@ -3914,6 +3914,14 @@
   word-break: break-word;
 }
 
+.product-card__sku {
+  font-size: 0.72rem;
+  color: var(--color-core-dark-grey);
+  opacity: 0.7;
+  margin-bottom: 0.25rem;
+  letter-spacing: 0.02em;
+}
+
 .product-card__name {
   font-family: var(--font-sans) !important;
   font-size: 1.2rem;
@@ -5730,6 +5738,14 @@
   margin-bottom: 0.75rem;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.product-page__sku {
+  font-size: 0.8rem;
+  color: var(--color-core-dark-grey);
+  opacity: 0.65;
+  margin-bottom: 0.4rem;
+  letter-spacing: 0.02em;
 }
 
 .product-page__title {

@@ -414,6 +414,7 @@ async function buildProductFilters(req) {
         OR coll.name ILIKE ${placeholder}
         OR cat.name ILIKE ${placeholder}
         OR catg.name ILIKE ${placeholder}
+        OR p.specs->>'sku' ILIKE ${placeholder}
       )`)
   }
 

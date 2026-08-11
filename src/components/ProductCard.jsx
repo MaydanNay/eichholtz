@@ -73,6 +73,9 @@ export default function ProductCard({ product, style, onCartOpen }) {
         {!product.category_name && !product.collection_name && product.category && (
           <p className="product-card__category">{product.category}</p>
         )}
+        {(product.specs?.sku || product.sku) && (
+          <p className="product-card__sku">Артикул: {product.specs?.sku || product.sku}</p>
+        )}
         <h3 className="product-card__name">
           <Link to={productUrl(product)} className="product-card__link">
             {product.name}

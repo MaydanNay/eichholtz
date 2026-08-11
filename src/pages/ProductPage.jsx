@@ -43,6 +43,12 @@ function normalizeSpecs(specs) {
     'care_instructions',
     'dimensions',
     'also_available_skus',
+    'algolia_nav_available',
+    'algolia_promoted_in',
+    'algolia_pin_rank',
+    'algolia_promoted',
+    'item_collection_launch',
+    'categories_without_path',
   ])
 
   if (value.specifications && typeof value.specifications === 'object') {
@@ -289,6 +295,9 @@ export default function ProductPage({ productId, onCartOpen, onCheckout }) {
             </p>
           )}
 
+          {product.specs?.sku && (
+            <p className="product-page__sku">Артикул: {product.specs.sku}</p>
+          )}
           <h1 className="product-page__title">{product.name}</h1>
 
           <div className="product-page__price-row">
