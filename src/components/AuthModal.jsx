@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useContacts } from '../hooks/useContacts'
 import { userAuth } from '../api/userAuth'
 import {
   formatOrderDate,
@@ -9,7 +10,7 @@ import {
 } from '../utils/orderFormat'
 
 const LOGIN_FORM = { email: '', password: '' }
-const REGISTER_FORM = { name: '', email: '', phone: '', password: '', confirm: '' }
+const REGISTER_FORM = { name: '', phone: '', password: '', confirm: '', privacyAccepted: false }
 
 function IconEye({ hidden }) {
   if (hidden) {
@@ -86,6 +87,7 @@ const MIN_PASSWORD_LENGTH = 8
 
 export default function AuthModal({ isOpen, initialTab = 'login', onClose }) {
   const { user, isAuthenticated, login, register, logout } = useAuth()
+  const { contacts } = useContacts()
   const [tab, setTab] = useState(initialTab)
   const [loginForm, setLoginForm] = useState(LOGIN_FORM)
   const [registerForm, setRegisterForm] = useState(REGISTER_FORM)
@@ -94,6 +96,8 @@ export default function AuthModal({ isOpen, initialTab = 'login', onClose }) {
   const [orders, setOrders] = useState([])
   const [ordersLoading, setOrdersLoading] = useState(false)
   const [ordersError, setOrdersError] = useState('')
+
+  const privacyPolicyUrl = String(contacts.privacyPolicyUrl || '').trim()
 
   useEffect(() => {
     if (isOpen) {
@@ -140,6 +144,11 @@ export default function AuthModal({ isOpen, initialTab = 'login', onClose }) {
     event.preventDefault()
     setError('')
 
+    if (!registerForm.phone.trim()) {
+      setError('Введите телефон')
+      return
+    }
+
     if (registerForm.password !== registerForm.confirm) {
       setError('Пароли не совпадают')
       return
@@ -150,11 +159,15 @@ export default function AuthModal({ isOpen, initialTab = 'login', onClose }) {
       return
     }
 
+    if (!registerForm.privacyAccepted) {
+      setError('Подтвердите согласие с политикой конфиденциальности')
+      return
+    }
+
     setLoading(true)
     try {
       await register({
         name: registerForm.name.trim(),
-        email: registerForm.email.trim(),
         phone: registerForm.phone.trim(),
         password: registerForm.password,
       })
@@ -214,13 +227,13 @@ export default function AuthModal({ isOpen, initialTab = 'login', onClose }) {
           {tab === 'login' ? (
             <form className="modal__form" onSubmit={handleLogin}>
               <label className="modal__field">
-                <span>Email</span>
+                <span>Телефон или email</span>
                 <input
-                  type="email"
+                  type="text"
                   value={loginForm.email}
                   onChange={(event) => setLoginForm({ ...loginForm, email: event.target.value })}
                   required
-                  autoComplete="email"
+                  autoComplete="username"
                 />
               </label>
               <PasswordField
@@ -245,21 +258,12 @@ export default function AuthModal({ isOpen, initialTab = 'login', onClose }) {
                 />
               </label>
               <label className="modal__field">
-                <span>Email</span>
-                <input
-                  type="email"
-                  value={registerForm.email}
-                  onChange={(event) => setRegisterForm({ ...registerForm, email: event.target.value })}
-                  required
-                  autoComplete="email"
-                />
-              </label>
-              <label className="modal__field">
                 <span>Телефон</span>
                 <input
                   type="tel"
                   value={registerForm.phone}
                   onChange={(event) => setRegisterForm({ ...registerForm, phone: event.target.value })}
+                  required
                   autoComplete="tel"
                 />
               </label>
@@ -278,6 +282,31 @@ export default function AuthModal({ isOpen, initialTab = 'login', onClose }) {
                 autoComplete="new-password"
                 minLength={MIN_PASSWORD_LENGTH}
               />
+              <label className="auth-modal__consent">
+                <input
+                  type="checkbox"
+                  checked={registerForm.privacyAccepted}
+                  onChange={(event) =>
+                    setRegisterForm({ ...registerForm, privacyAccepted: event.target.checked })
+                  }
+                  required
+                />
+                <span>
+                  Я согласен с{' '}
+                  {privacyPolicyUrl ? (
+                    <a
+                      href={privacyPolicyUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      политикой конфиденциальности
+                    </a>
+                  ) : (
+                    'политикой конфиденциальности'
+                  )}
+                </span>
+              </label>
               <button type="submit" className="auth-modal__submit" disabled={loading}>
                 {loading ? 'Регистрация...' : 'Зарегистрироваться'}
               </button>

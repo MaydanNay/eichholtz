@@ -176,6 +176,20 @@ export default function ContactsSettingsPage() {
             </div>
 
             <h2 style={{ fontSize: '1.15rem', marginBottom: '1rem', fontWeight: 500, paddingBottom: '0.5rem', borderBottom: '1px solid var(--color-ui-bg-light)' }}>
+              Политика конфиденциальности
+            </h2>
+            <div style={{ marginBottom: '2rem' }}>
+              <strong style={{ display: 'block', fontSize: '0.9rem', color: 'var(--color-core-dark-grey)', marginBottom: '0.25rem' }}>Ссылка</strong>
+              {contacts.privacyPolicyUrl ? (
+                <a href={contacts.privacyPolicyUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--color-core-black)' }}>
+                  {contacts.privacyPolicyUrl}
+                </a>
+              ) : (
+                <p style={{ margin: 0, color: 'var(--color-core-dark-grey)' }}>Не указана</p>
+              )}
+            </div>
+
+            <h2 style={{ fontSize: '1.15rem', marginBottom: '1rem', fontWeight: 500, paddingBottom: '0.5rem', borderBottom: '1px solid var(--color-ui-bg-light)' }}>
               Социальные сети
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -312,6 +326,25 @@ export default function ContactsSettingsPage() {
                   placeholder="+31 25 275 5484"
                 />
               </label>
+            </div>
+
+            <h2 style={{ fontSize: '1.15rem', marginBottom: '1rem', fontWeight: 500, paddingBottom: '0.5rem', borderBottom: '1px solid var(--color-ui-bg-light)' }}>
+              Политика конфиденциальности
+            </h2>
+            <div style={{ marginBottom: '2rem' }}>
+              <label className="admin-field" style={{ marginBottom: 0 }}>
+                <span>Ссылка на политику конфиденциальности</span>
+                <input
+                  type="url"
+                  name="privacyPolicyUrl"
+                  value={contacts.privacyPolicyUrl || ''}
+                  onChange={handleChange}
+                  placeholder="https://..."
+                />
+              </label>
+              <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: 'var(--color-core-dark-grey)' }}>
+                Используется в подвале сайта и в галочке согласия при регистрации.
+              </p>
             </div>
 
             <h2 style={{ fontSize: '1.15rem', marginBottom: '1rem', fontWeight: 500, paddingBottom: '0.5rem', borderBottom: '1px solid var(--color-ui-bg-light)' }}>

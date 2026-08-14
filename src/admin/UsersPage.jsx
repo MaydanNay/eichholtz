@@ -75,7 +75,11 @@ export default function UsersPage() {
                     <strong>{user.name}</strong>
                   </td>
                   <td>
-                    <a href={`mailto:${user.email}`}>{user.email}</a>
+                    {user.email ? (
+                      <a href={`mailto:${user.email}`}>{user.email}</a>
+                    ) : (
+                      '—'
+                    )}
                   </td>
                   <td>
                     {user.phone ? (

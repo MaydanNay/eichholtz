@@ -62,6 +62,18 @@ export default function Footer() {
             <Link to="/contacts">Обмен и возврат</Link>
             <Link to="/contacts">Уход за мебелью</Link>
             <Link to="/designers">Сотрудничество с дизайнерами</Link>
+            {contacts.privacyPolicyUrl ? (
+              <a
+                href={contacts.privacyPolicyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="footer__col-link"
+              >
+                Политика конфиденциальности
+              </a>
+            ) : (
+              <span className="footer__col-link footer__muted">Политика конфиденциальности</span>
+            )}
           </div>
 
           <div className="footer__col">
@@ -106,7 +118,19 @@ export default function Footer() {
 
         <div className="footer__bottom">
           <img src="/logo.svg" alt="Eichholtz" className="footer__logo" />
-          <p className="footer__copy">© {new Date().getFullYear()} Eichholtz Казахстан</p>
+          <div className="footer__bottom-meta">
+            <p className="footer__copy">© {new Date().getFullYear()} Eichholtz Казахстан</p>
+            {contacts.privacyPolicyUrl ? (
+              <a
+                href={contacts.privacyPolicyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="footer__privacy-link"
+              >
+                Политика конфиденциальности
+              </a>
+            ) : null}
+          </div>
           <div className="footer__socials">
             {contacts.socials?.map((social) => (
               <a

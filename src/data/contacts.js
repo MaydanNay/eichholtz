@@ -13,6 +13,7 @@ export const DEFAULT_CONTACTS = {
   emailCoop: 'marketing@ideadecor.kz',
   emailContract: 'contract@eichholtz.com',
   contractPhone: '+31 25 275 5484',
+  privacyPolicyUrl: '',
   socials: [
     {
       id: 'default-insta',
