@@ -554,6 +554,50 @@ router.get('/', async (req, res) => {
   }
 })
 
+router.get('/meta/product-groups', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await query(`
+      SELECT specs->>'product_group' AS name, COUNT(*)::int AS count
+      FROM products
+      WHERE specs->>'product_group' IS NOT NULL AND specs->>'product_group' != ''
+      GROUP BY specs->>'product_group'
+      ORDER BY specs->>'product_group' ASC
+    `)
+    res.json(rows)
+  } catch {
+    res.status(500).json({ error: 'Ошибка сервера' })
+  }
+})
+
+router.put('/meta/product-groups/rename', requireAdmin, async (req, res) => {
+  const { oldName, newName } = req.body
+  if (!oldName || !newName) return res.status(400).json({ error: 'oldName и newName обязательны' })
+  try {
+    const { rowCount } = await query(
+      `UPDATE products SET specs = jsonb_set(specs, '{product_group}', to_jsonb($1::text)), updated_at = NOW()
+       WHERE specs->>'product_group' = $2`,
+      [newName, oldName]
+    )
+    res.json({ updated: rowCount })
+  } catch {
+    res.status(500).json({ error: 'Ошибка сервера' })
+  }
+})
+
+router.delete('/meta/product-groups/:name', requireAdmin, async (req, res) => {
+  const name = decodeURIComponent(req.params.name)
+  try {
+    const { rowCount } = await query(
+      `UPDATE products SET specs = specs - 'product_group', updated_at = NOW()
+       WHERE specs->>'product_group' = $1`,
+      [name]
+    )
+    res.json({ updated: rowCount })
+  } catch {
+    res.status(500).json({ error: 'Ошибка сервера' })
+  }
+})
+
 router.get('/:id', async (req, res) => {
   try {
     const { rows } = await query(`${PRODUCT_SELECT} WHERE p.id = $1`, [req.params.id])

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import CategoriesPage from './CategoriesPage'
 import ProductsPage from './ProductsPage'
 import FilterOptionsPage from './FilterOptionsPage'
+import ProductGroupsPage from './ProductGroupsPage'
 import { api } from './api'
 
 export default function ProductsHubPage() {
@@ -63,10 +64,26 @@ export default function ProductsHubPage() {
           >
             Характеристики
           </button>
+          <button
+            type="button"
+            style={{
+              background: 'none', border: 'none', padding: '1rem 0', fontSize: '1.1rem', cursor: 'pointer',
+              fontWeight: activeTab === 'product_groups' ? 'bold' : 'normal',
+              borderBottom: activeTab === 'product_groups' ? '2px solid var(--color-core-black)' : '2px solid transparent',
+              color: activeTab === 'product_groups' ? 'var(--color-core-black)' : 'var(--color-core-dark-grey)',
+              outline: 'none'
+            }}
+            onClick={() => setActiveTab('product_groups')}
+          >
+            Группы товаров
+          </button>
         </div>
       </div>
       <div className="products-hub-content" style={{ flex: 1, position: 'relative' }}>
-        {activeTab === 'products' ? <ProductsPage /> : activeTab === 'categories' ? <CategoriesPage /> : <FilterOptionsPage />}
+        {activeTab === 'products' ? <ProductsPage />
+          : activeTab === 'categories' ? <CategoriesPage />
+          : activeTab === 'product_groups' ? <ProductGroupsPage />
+          : <FilterOptionsPage />}
       </div>
     </div>
   )

@@ -99,6 +99,12 @@ export const api = {
   updateCategory: (id, data) => request(`/categories/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCategory: (id) => request(`/categories/${id}`, { method: 'DELETE' }),
 
+  getProductGroups: () => request('/products/meta/product-groups'),
+  renameProductGroup: (oldName, newName) =>
+    request('/products/meta/product-groups/rename', { method: 'PUT', body: JSON.stringify({ oldName, newName }) }),
+  deleteProductGroup: (name) =>
+    request(`/products/meta/product-groups/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+
   uploadImage: async (file, category = 'products') => {
     const formData = new FormData()
     formData.append('image', file)

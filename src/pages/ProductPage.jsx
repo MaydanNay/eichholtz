@@ -53,7 +53,10 @@ function normalizeSpecs(specs) {
 
   if (value.specifications && typeof value.specifications === 'object') {
     for (const [k, v] of Object.entries(value.specifications)) {
-      if (v) entries.push([k, k, String(v)])
+      if (!v) continue
+      // Hide "Общая информация" rows on the product page (keeps admin editable separately).
+      if (String(k).trim().toLowerCase() === 'общая информация') continue
+      entries.push([k, k, String(v)])
     }
   }
 

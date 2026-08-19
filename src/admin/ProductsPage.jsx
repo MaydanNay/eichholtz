@@ -24,13 +24,32 @@ const EMPTY = {
   sku: '',
   product_group: '',
   finish: '',
+  fabric_composition: '',
+  max_load_kg: '',
+  max_load_lb: '',
+  // Determines where we persist "Применение":
+  // - 'top' => specs.indoor_outdoor
+  // - 'specs' => specs.specifications['Применение']
+  indoor_outdoor_source: 'top',
   height: '',
   diameter: '',
   width: '',
   depth: '',
+  length: '',
+  weight: '',
+  volume: '',
   material: '',
   color: '',
   fabric: '',
+  shape: '',
+  style: '',
+  indoor_outdoor: '',
+  country_of_origin: '',
+  assembly: '',
+  care_instructions: '',
+  dimensions: '',
+  // Raw nested specifications object (we edit only one key inside it)
+  specifications: {},
 }
 
 function productSpecs(product) {
@@ -113,6 +132,11 @@ function flattenCategoriesTree(categories) {
 function specsFromProduct(product) {
   const specs = productSpecs(product)
   const finish = specs.finish || specs.variation || ''
+  const indoorOutdoorTop = specs.indoor_outdoor
+  const indoorOutdoorInSpecifications = specs.specifications?.['Применение']
+  const indoorOutdoorSource = indoorOutdoorTop
+    ? 'top'
+    : (indoorOutdoorInSpecifications ? 'specs' : 'top')
   return {
     sku: specFieldToForm(specs.sku),
     product_group: specFieldToForm(specs.product_group),
@@ -121,9 +145,24 @@ function specsFromProduct(product) {
     diameter: specFieldToForm(specs.diameter),
     width: specFieldToForm(specs.width),
     depth: specFieldToForm(specs.depth),
+    length: specFieldToForm(specs.length),
+    weight: specFieldToForm(specs.weight),
+    volume: specFieldToForm(specs.volume),
     material: specFieldToForm(specs.material),
     color: specFieldToForm(specs.color),
     fabric: specFieldToForm(specs.fabric),
+    fabric_composition: specFieldToForm(specs.specifications?.['Состав ткани']),
+    shape: specFieldToForm(specs.shape),
+    style: specFieldToForm(specs.style),
+    indoor_outdoor: specFieldToForm(indoorOutdoorTop ?? indoorOutdoorInSpecifications),
+    indoor_outdoor_source: indoorOutdoorSource,
+    max_load_kg: specFieldToForm(specs.specifications?.['Макс. нагрузка, кг']),
+    max_load_lb: specFieldToForm(specs.specifications?.['Макс. нагрузка, фунты']),
+    country_of_origin: specFieldToForm(specs.country_of_origin),
+    assembly: specFieldToForm(specs.assembly),
+    care_instructions: specFieldToForm(specs.care_instructions),
+    dimensions: specFieldToForm(specs.dimensions),
+    specifications: specs.specifications && typeof specs.specifications === 'object' ? specs.specifications : {},
     extra_categories: productExtraCategoryIds(product).map(String),
   }
 }
@@ -133,6 +172,40 @@ function buildPayload(form) {
   const extraCategories = (form.extra_categories || [])
     .map((v) => Number(v))
     .filter((n) => Number.isFinite(n) && n !== primaryId)
+
+  const nextSpecifications = (form.specifications && typeof form.specifications === 'object')
+    ? { ...form.specifications }
+    : {}
+  if (form.fabric_composition && String(form.fabric_composition).trim()) {
+    nextSpecifications['Состав ткани'] = String(form.fabric_composition).trim()
+  } else {
+    delete nextSpecifications['Состав ткани']
+  }
+
+  // Persist "Применение" either at top-level or inside specs.specifications.
+  if (form.indoor_outdoor_source === 'specs') {
+    if (form.indoor_outdoor && String(form.indoor_outdoor).trim()) {
+      nextSpecifications['Применение'] = String(form.indoor_outdoor).trim()
+    } else {
+      delete nextSpecifications['Применение']
+    }
+  } else {
+    // Avoid duplicates if the product stores it both places.
+    delete nextSpecifications['Применение']
+  }
+
+  // Extra nested specs shown on the product page.
+  if (form.max_load_kg && String(form.max_load_kg).trim()) {
+    nextSpecifications['Макс. нагрузка, кг'] = String(form.max_load_kg).trim()
+  } else {
+    delete nextSpecifications['Макс. нагрузка, кг']
+  }
+
+  if (form.max_load_lb && String(form.max_load_lb).trim()) {
+    nextSpecifications['Макс. нагрузка, фунты'] = String(form.max_load_lb).trim()
+  } else {
+    delete nextSpecifications['Макс. нагрузка, фунты']
+  }
 
   return {
     name: form.name,
@@ -156,9 +229,21 @@ function buildPayload(form) {
       diameter: form.diameter,
       width: form.width,
       depth: form.depth,
+      length: form.length,
+      weight: form.weight,
+      volume: form.volume,
       material: form.material,
       color: form.color,
       fabric: form.fabric,
+      // Persist "Состав ткани" inside specs.specifications (nested object)
+      specifications: nextSpecifications,
+      shape: form.shape,
+      style: form.style,
+      ...(form.indoor_outdoor_source === 'top' ? { indoor_outdoor: form.indoor_outdoor } : {}),
+      country_of_origin: form.country_of_origin,
+      assembly: form.assembly,
+      care_instructions: form.care_instructions,
+      dimensions: form.dimensions,
       extra_categories: extraCategories,
     },
   }
@@ -257,6 +342,7 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState([])
   const [collections, setCollections] = useState([])
   const [catalogs, setCatalogs] = useState([])
+  const [productGroups, setProductGroups] = useState([])
   const [form, setForm] = useState(EMPTY)
   const [editingId, setEditingId] = useState(null)
   const [showForm, setShowForm] = useState(false)
@@ -275,17 +361,19 @@ export default function ProductsPage() {
 
   const load = async () => {
     try {
-      const [productsData, categoriesData, collectionsData, catalogsData, settingsData] = await Promise.all([
+      const [productsData, categoriesData, collectionsData, catalogsData, productGroupsData, settingsData] = await Promise.all([
         api.getProducts(),
         api.getCategories(),
         api.getCollections({ kind: 'category' }),
         api.getCollections({ kind: 'catalog' }),
+        api.getProductGroups(),
         getHomeSettings(),
       ])
       setProducts(productsData)
       setCategories(categoriesData)
       setCollections(collectionsData)
       setCatalogs(catalogsData)
+      setProductGroups(productGroupsData)
       
       if (settingsData.product_attributes) {
         try {
@@ -604,11 +692,21 @@ export default function ProductsPage() {
             </label>
             <label className="admin-field">
               <span>Группа товаров</span>
-              <input
+              <select
                 value={form.product_group}
                 onChange={(e) => setForm({ ...form, product_group: e.target.value })}
-                placeholder="например: Искусственные цветы и зелень"
-              />
+              >
+                <option value="">Без группы</option>
+                {(productGroups || []).map((g) => (
+                  <option key={g.name} value={g.name}>
+                    {g.name}
+                  </option>
+                ))}
+                {form.product_group &&
+                  !(productGroups || []).some((g) => g.name === form.product_group) && (
+                    <option value={form.product_group}>{form.product_group}</option>
+                  )}
+              </select>
             </label>
             <label className="admin-field">
               <span>Основная категория</span>
@@ -732,49 +830,88 @@ export default function ProductsPage() {
               <span>Описание</span>
               <textarea rows={5} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             </label>
+            <div className="admin-field admin-field--full" style={{ borderTop: '1px solid var(--color-ui-bg-light)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+              <span style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--color-core-dark-grey)' }}>Характеристики и фильтры</span>
+            </div>
+
+            <datalist id="dl-finish">
+              {(productAttributes?.finish?.options || []).map(o => <option key={o.value} value={o.value} />)}
+            </datalist>
+            <datalist id="dl-color">
+              {(productAttributes?.color?.options || []).map(o => <option key={o.value} value={o.value} />)}
+            </datalist>
+            <datalist id="dl-material">
+              {(productAttributes?.material?.options || []).map(o => <option key={o.value} value={o.value} />)}
+            </datalist>
+            <datalist id="dl-fabric">
+              {(productAttributes?.fabric?.options || []).map(o => <option key={o.value} value={o.value} />)}
+            </datalist>
+            <datalist id="dl-shape">
+              {(productAttributes?.shape?.options || []).map(o => <option key={o.value} value={o.value} />)}
+            </datalist>
+
             <label className="admin-field">
               <span>Отделка</span>
-              <select value={form.finish} onChange={(e) => setForm({ ...form, finish: e.target.value })}>
-                <option value="">Без отделки</option>
-                {(productAttributes?.finish?.options || []).map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.value}</option>
-                ))}
-              </select>
+              <input list="dl-finish" value={form.finish} onChange={(e) => setForm({ ...form, finish: e.target.value })} placeholder="Выберите или введите" />
             </label>
             <label className="admin-field">
               <span>Цвет</span>
-              <select value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })}>
-                <option value="">Без цвета</option>
-                {(productAttributes?.color?.options || []).map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.value}</option>
-                ))}
-              </select>
+              <input list="dl-color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} placeholder="Выберите или введите" />
             </label>
             <label className="admin-field">
               <span>Материал</span>
-              <select value={form.material} onChange={(e) => setForm({ ...form, material: e.target.value })}>
-                <option value="">Без материала</option>
-                {(productAttributes?.material?.options || []).map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.value}</option>
-                ))}
-              </select>
+              <input list="dl-material" value={form.material} onChange={(e) => setForm({ ...form, material: e.target.value })} placeholder="Выберите или введите" />
             </label>
             <label className="admin-field">
               <span>Ткань</span>
-              <select value={form.fabric} onChange={(e) => setForm({ ...form, fabric: e.target.value })}>
-                <option value="">Без ткани</option>
-                {(productAttributes?.fabric?.options || []).map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.value}</option>
-                ))}
-              </select>
+              <input list="dl-fabric" value={form.fabric} onChange={(e) => setForm({ ...form, fabric: e.target.value })} placeholder="Выберите или введите" />
             </label>
+            <label className="admin-field">
+              <span>Состав ткани</span>
+              <input
+                value={form.fabric_composition}
+                onChange={(e) => setForm({ ...form, fabric_composition: e.target.value })}
+                placeholder="например: 51% recycled полиэстер | 49% полиэстер"
+              />
+            </label>
+            <label className="admin-field">
+              <span>Форма</span>
+              <input list="dl-shape" value={form.shape} onChange={(e) => setForm({ ...form, shape: e.target.value })} placeholder="Выберите или введите" />
+            </label>
+            <label className="admin-field">
+              <span>Стиль</span>
+              <input value={form.style} onChange={(e) => setForm({ ...form, style: e.target.value })} placeholder="например: Modern" />
+            </label>
+            <label className="admin-field">
+              <span>Применение</span>
+              <input value={form.indoor_outdoor} onChange={(e) => setForm({ ...form, indoor_outdoor: e.target.value })} placeholder="например: Только для помещений / сухих мест" />
+            </label>
+            <label className="admin-field">
+              <span>Макс. нагрузка, кг</span>
+              <input
+                value={form.max_load_kg}
+                onChange={(e) => setForm({ ...form, max_load_kg: e.target.value })}
+                placeholder="например: 200"
+              />
+            </label>
+            <label className="admin-field">
+              <span>Макс. нагрузка, фунты</span>
+              <input
+                value={form.max_load_lb}
+                onChange={(e) => setForm({ ...form, max_load_lb: e.target.value })}
+                placeholder="например: 440.92"
+              />
+            </label>
+            <label className="admin-field">
+              <span>Страна производства</span>
+              <input value={form.country_of_origin} onChange={(e) => setForm({ ...form, country_of_origin: e.target.value })} placeholder="например: Netherlands" />
+            </label>
+            <div className="admin-field admin-field--full" style={{ borderTop: '1px solid var(--color-ui-bg-light)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+              <span style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--color-core-dark-grey)' }}>Размеры</span>
+            </div>
             <label className="admin-field">
               <span>Высота</span>
               <input value={form.height} onChange={(e) => setForm({ ...form, height: e.target.value })} placeholder="700" />
-            </label>
-            <label className="admin-field">
-              <span>Диаметр</span>
-              <input value={form.diameter} onChange={(e) => setForm({ ...form, diameter: e.target.value })} placeholder="325" />
             </label>
             <label className="admin-field">
               <span>Ширина</span>
@@ -783,6 +920,37 @@ export default function ProductsPage() {
             <label className="admin-field">
               <span>Глубина</span>
               <input value={form.depth} onChange={(e) => setForm({ ...form, depth: e.target.value })} />
+            </label>
+            <label className="admin-field">
+              <span>Длина</span>
+              <input value={form.length} onChange={(e) => setForm({ ...form, length: e.target.value })} />
+            </label>
+            <label className="admin-field">
+              <span>Диаметр</span>
+              <input value={form.diameter} onChange={(e) => setForm({ ...form, diameter: e.target.value })} placeholder="325" />
+            </label>
+            <label className="admin-field">
+              <span>Вес</span>
+              <input value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} placeholder="например: 12 kg" />
+            </label>
+            <label className="admin-field">
+              <span>Объём</span>
+              <input value={form.volume} onChange={(e) => setForm({ ...form, volume: e.target.value })} placeholder="например: 2.5 L" />
+            </label>
+            <label className="admin-field admin-field--full">
+              <span>Габариты (текст)</span>
+              <input value={form.dimensions} onChange={(e) => setForm({ ...form, dimensions: e.target.value })} placeholder="например: W80 x D45 x H75 cm" />
+            </label>
+            <div className="admin-field admin-field--full" style={{ borderTop: '1px solid var(--color-ui-bg-light)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+              <span style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--color-core-dark-grey)' }}>Дополнительно</span>
+            </div>
+            <label className="admin-field admin-field--full">
+              <span>Сборка</span>
+              <input value={form.assembly} onChange={(e) => setForm({ ...form, assembly: e.target.value })} placeholder="например: Assembly required" />
+            </label>
+            <label className="admin-field admin-field--full">
+              <span>Уход за изделием</span>
+              <textarea rows={3} value={form.care_instructions} onChange={(e) => setForm({ ...form, care_instructions: e.target.value })} placeholder="Инструкции по уходу..." />
             </label>
             <label className="admin-field admin-field--checkbox">
               <input type="checkbox" checked={form.in_stock} onChange={(e) => setForm({ ...form, in_stock: e.target.checked })} />
