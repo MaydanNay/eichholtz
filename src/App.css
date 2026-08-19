@@ -3039,8 +3039,51 @@
 }
 
 .products-catalog__header {
-  max-width: 1100px;
+  max-width: 1350px;
   margin: 0 auto 2rem;
+}
+
+.products-catalog__header-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 1rem 1.5rem;
+}
+
+.products-catalog__header-row .products-catalog__title {
+  grid-column: 1 / -1;
+  text-align: center;
+}
+
+.products-catalog__header-row .products-catalog__pdf-btn {
+  grid-column: 2;
+  justify-self: end;
+  z-index: 1;
+}
+
+.products-catalog__pdf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem 1.25rem;
+  border: 1px solid var(--color-core-dark-grey, #1a1a1a);
+  background: transparent;
+  color: var(--color-core-dark-grey, #1a1a1a);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, opacity 0.2s ease;
+}
+
+.products-catalog__pdf-btn:hover:not(:disabled) {
+  background: var(--color-core-dark-grey, #1a1a1a);
+  color: var(--color-core-white, #fff);
+}
+
+.products-catalog__pdf-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 /* Hospitality Page */

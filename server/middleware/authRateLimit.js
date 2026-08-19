@@ -38,3 +38,12 @@ export const inquiryLimiter = rateLimit({
     return `inquiry:ip:${ipKeyGenerator(req.ip)}`
   },
 })
+
+/** 10 PDF-каталогов с одного IP за 15 минут */
+export const catalogPdfLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Слишком много запросов на каталог. Попробуйте через 15 минут.' },
+})

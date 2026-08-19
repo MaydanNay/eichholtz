@@ -39,6 +39,20 @@ require_docker() {
   docker compose version >/dev/null 2>&1 || fail "Docker Compose plugin not found"
 }
 
+sync_dist_from_image() {
+  local image_id
+  image_id="$(docker images -q "${APP_NAME}-app:latest" | head -n 1)"
+  if [[ -z "$image_id" ]]; then
+    image_id="$(docker compose images -q app | head -n 1)"
+  fi
+  if [[ -z "$image_id" ]]; then
+    fail "App image not found after build"
+  fi
+  log "Syncing dist from built image to host..."
+  mkdir -p dist
+  docker run --rm --entrypoint /bin/sh "$image_id" -c 'tar -C /app/dist -cf - .' | tar -C dist -xf -
+}
+
 deploy_local() {
   local app_dir
   app_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -58,6 +72,7 @@ deploy_local() {
   if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
     log "Building containers..."
     docker compose build
+    sync_dist_from_image
   else
     log "Skipping build (SKIP_BUILD=1)"
   fi
@@ -109,6 +124,8 @@ deploy_remote() {
     --exclude .git \
     --exclude .env \
     --exclude pgdata \
+    --exclude server/cache \
+    --exclude public/images \
     --exclude venv \
     --exclude __pycache__ \
     "${local_dir}/" "${remote}:${remote_dir}/"

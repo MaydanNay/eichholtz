@@ -60,6 +60,7 @@ export default function ProductsCatalogSection({
   searchQuery,
   titleOverride,
   hideFilterChip = false,
+  catalogPdfHref,
   onClearCollectionFilter,
   onClearSearchQuery,
   onCartOpen,
@@ -82,7 +83,48 @@ export default function ProductsCatalogSection({
   const [selectedSpecs, setSelectedSpecs] = useState({}) // { [key]: [value1, value2] }
   const [availableSpecs, setAvailableSpecs] = useState([])
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const [pdfError, setPdfError] = useState('')
   const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!pdfError) return undefined
+    const timer = window.setTimeout(() => setPdfError(''), 6000)
+    return () => window.clearTimeout(timer)
+  }, [pdfError])
+
+  const handleCatalogPdfDownload = async () => {
+    if (!catalogPdfHref || pdfLoading) return
+    setPdfLoading(true)
+    setPdfError('')
+    try {
+      const res = await fetch(catalogPdfHref)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Не удалось сформировать каталог')
+      }
+      const contentType = res.headers.get('Content-Type') || ''
+      if (!contentType.includes('application/pdf')) {
+        throw new Error('Сервер вернул некорректный ответ')
+      }
+      const blob = await res.blob()
+      const disposition = res.headers.get('Content-Disposition') || ''
+      const match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+      const filename = match ? decodeURIComponent(match[1]) : 'eicholtz-catalog.pdf'
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setPdfError(err.message || 'Не удалось сформировать каталог')
+    } finally {
+      setPdfLoading(false)
+    }
+  }
 
   const categoriesTree = useMemo(() => {
     const map = new Map()
@@ -410,9 +452,21 @@ export default function ProductsCatalogSection({
     <>
       <section className="products-catalog" id="products">
         <Reveal className="products-catalog__header" variant="blur-up">
-          <h2 className="products-catalog__title section-heading">
-            {titleOverride || (hasSearch ? 'Результаты поиска' : 'Каталог товаров')}
-          </h2>
+          <div className="products-catalog__header-row">
+            <h2 className="products-catalog__title section-heading">
+              {titleOverride || (hasSearch ? 'Результаты поиска' : 'Каталог товаров')}
+            </h2>
+            {catalogPdfHref && (
+              <button
+                type="button"
+                className="products-catalog__pdf-btn"
+                onClick={handleCatalogPdfDownload}
+                disabled={pdfLoading}
+              >
+                {pdfLoading ? 'Формируем PDF…' : 'Скачать каталог'}
+              </button>
+            )}
+          </div>
           {hasSearch && (
             <div className="products-catalog__filter">
               <span>Поиск: «{searchQuery}»</span>
@@ -655,6 +709,19 @@ export default function ProductsCatalogSection({
           </div>
         </div>
       </section>
+      {pdfError && (
+        <div className="action-toast" role="alert">
+          <span>{pdfError}</span>
+          <button
+            type="button"
+            className="action-toast__close"
+            onClick={() => setPdfError('')}
+            aria-label="Закрыть"
+          >
+            ×
+          </button>
+        </div>
+      )}
     </>
   )
 }

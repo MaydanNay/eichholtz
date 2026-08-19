@@ -21,8 +21,8 @@
   --color-ui-bg-light: #f2f1f0;
   --color-ui-bg-accent: #f4f2f2;
 
-  --font-serif: 'Silk Serif', 'Scotch Display Roman', serif;
-  --font-sans: 'Sofia Pro', sans-serif;
+  --font-serif: 'Cormorant Garamond', Georgia, serif;
+  --font-sans: 'Jost', system-ui, sans-serif;
 
   --scroll-size: 6px;
   --scroll-track: transparent;
@@ -134,10 +134,10 @@ img {
 
 /* Базовые правила для контента, меню, кнопок и карточек */
 body, html, button, input, .nav-menu, .product-card__name {
-  font-family: 'Sofia Pro', sans-serif !important;
+  font-family: 'Jost', system-ui, sans-serif !important;
 }
 
 /* Правила для акцентных/редакционных заголовков, цитат и блоков сторителлинга */
 h1, h2, .storytelling__title, .editorial-heading {
-  font-family: 'Silk Serif', 'Scotch Display Roman', serif !important;
+  font-family: 'Cormorant Garamond', Georgia, serif !important;
 }

@@ -14,6 +14,7 @@ dist-ssr
 .env
 server/data.db
 pgdata
+server/cache
 
 # Editor directories and files
 .vscode/*

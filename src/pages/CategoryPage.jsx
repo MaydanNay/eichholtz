@@ -235,6 +235,7 @@ export default function CategoryPage({ categoryId, onCartOpen }) {
         collectionFilterName={category.name}
         titleOverride={category.name}
         hideFilterChip
+        catalogPdfHref={!isRootPage ? `/api/categories/${category.id}/catalog.pdf` : undefined}
         onCartOpen={onCartOpen}
       />
 

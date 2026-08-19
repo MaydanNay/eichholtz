@@ -1,6 +1,14 @@
 import { Router } from 'express'
 import { query } from '../db.js'
 import { isAdminRequest, requireAdmin } from '../middleware/auth.js'
+import { catalogPdfLimiter } from '../middleware/authRateLimit.js'
+import {
+  generateCategoryCatalogPdf,
+  PDF_GENERATION_TIMEOUT_MS,
+  safeFilename,
+} from '../lib/categoryCatalogPdf.js'
+import { getCatalogPdf } from '../lib/catalogPdfCache.js'
+import { PdfGenerationAbortedError } from '../lib/pdfGenerationError.js'
 
 const router = Router()
 
@@ -46,6 +54,49 @@ router.get('/', async (req, res) => {
     res.json(rows)
   } catch {
     res.status(500).json({ error: 'Ошибка сервера' })
+  }
+})
+
+router.get('/:id/catalog.pdf', catalogPdfLimiter, async (req, res) => {
+  const abortController = new AbortController()
+  let timeoutId
+
+  try {
+    const id = Number(req.params.id)
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Неверный id категории' })
+
+    const { rows } = await query('SELECT * FROM categories WHERE id = $1', [id])
+    const category = rows[0]
+    if (!category || !category.published) {
+      return res.status(404).json({ error: 'Категория не найдена' })
+    }
+    if (category.parent_id == null) {
+      return res.status(404).json({ error: 'Каталог недоступен для корневой категории' })
+    }
+
+    timeoutId = setTimeout(() => {
+      abortController.abort(new PdfGenerationAbortedError())
+    }, PDF_GENERATION_TIMEOUT_MS)
+
+    const { buffer: pdfBuffer, fromCache } = await getCatalogPdf(
+      category,
+      generateCategoryCatalogPdf,
+      abortController.signal,
+    )
+
+    const filename = `eicholtz-${safeFilename(category.name)}.pdf`
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`)
+    res.setHeader('X-Catalog-Pdf-Cache', fromCache ? 'HIT' : 'MISS')
+    res.send(pdfBuffer)
+  } catch (err) {
+    if (err instanceof PdfGenerationAbortedError || err?.name === 'AbortError') {
+      return res.status(504).json({ error: 'Формирование каталога заняло слишком много времени. Попробуйте позже.' })
+    }
+    console.error('Category catalog PDF error:', err)
+    res.status(500).json({ error: 'Ошибка генерации каталога' })
+  } finally {
+    clearTimeout(timeoutId)
   }
 })
 
