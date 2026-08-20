@@ -5,6 +5,10 @@ import {
   buildOrderSql,
   resolveAlgoliaPromotedPath as resolveAlgoliaPromotedPathForRequest,
 } from '../lib/productSort.js'
+import {
+  invalidateCatalogPdfForProductChange,
+  parseExtraCategoryIds,
+} from '../lib/catalogPdfCache.js'
 
 const router = Router()
 
@@ -567,7 +571,16 @@ router.post('/', requireAdmin, async (req, res) => {
     )
 
     const { rows: full } = await query(`${PRODUCT_SELECT} WHERE p.id = $1`, [rows[0].id])
-    res.status(201).json(normalizeProduct(full[0]))
+    const product = normalizeProduct(full[0])
+    try {
+      await invalidateCatalogPdfForProductChange({
+        categoryId: product.category_id,
+        extraCategoryIds: parseExtraCategoryIds(product.specs),
+      })
+    } catch (err) {
+      console.error('Catalog PDF cache invalidation failed after product create:', err)
+    }
+    res.status(201).json(product)
   } catch {
     res.status(500).json({ error: 'Ошибка сервера' })
   }
@@ -607,9 +620,11 @@ router.put('/:id', requireAdmin, async (req, res) => {
       ? await resolveCategoryLabel(category, category_id || null)
       : (category ?? e.category)
 
-    const nextSpecs = specs !== undefined
-      ? JSON.stringify(mergeSpecs(e.specs, specs))
-      : (typeof e.specs === 'string' ? e.specs : JSON.stringify(e.specs || {}))
+    const nextSpecsObject = specs !== undefined
+      ? mergeSpecs(e.specs, specs)
+      : parseSpecsObject(e.specs)
+
+    const nextSpecs = JSON.stringify(nextSpecsObject)
 
     const hasImagesInput = req.body.images !== undefined || req.body.image_url !== undefined
     const nextImages = hasImagesInput
@@ -643,7 +658,18 @@ router.put('/:id', requireAdmin, async (req, res) => {
     )
 
     const { rows: full } = await query(`${PRODUCT_SELECT} WHERE p.id = $1`, [rows[0].id])
-    res.json(normalizeProduct(full[0]))
+    const product = normalizeProduct(full[0])
+    try {
+      await invalidateCatalogPdfForProductChange({
+        categoryId: product.category_id,
+        previousCategoryId: e.category_id,
+        extraCategoryIds: parseExtraCategoryIds(nextSpecsObject),
+        previousExtraCategoryIds: parseExtraCategoryIds(e.specs),
+      })
+    } catch (err) {
+      console.error('Catalog PDF cache invalidation failed after product update:', err)
+    }
+    res.json(product)
   } catch {
     res.status(500).json({ error: 'Ошибка сервера' })
   }
@@ -651,8 +677,18 @@ router.put('/:id', requireAdmin, async (req, res) => {
 
 router.delete('/:id', requireAdmin, async (req, res) => {
   try {
-    const { rowCount } = await query('DELETE FROM products WHERE id = $1', [req.params.id])
-    if (rowCount === 0) return res.status(404).json({ error: 'Товар не найден' })
+    const { rows: existing } = await query('SELECT category_id, specs FROM products WHERE id = $1', [req.params.id])
+    if (!existing[0]) return res.status(404).json({ error: 'Товар не найден' })
+
+    await query('DELETE FROM products WHERE id = $1', [req.params.id])
+    try {
+      await invalidateCatalogPdfForProductChange({
+        categoryId: existing[0].category_id,
+        extraCategoryIds: parseExtraCategoryIds(existing[0].specs),
+      })
+    } catch (err) {
+      console.error('Catalog PDF cache invalidation failed after product delete:', err)
+    }
     res.json({ success: true })
   } catch {
     res.status(500).json({ error: 'Ошибка сервера' })

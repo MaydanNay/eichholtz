@@ -7,7 +7,7 @@ import {
   PDF_GENERATION_TIMEOUT_MS,
   safeFilename,
 } from '../lib/categoryCatalogPdf.js'
-import { getCatalogPdf } from '../lib/catalogPdfCache.js'
+import { getCatalogPdf, invalidateCatalogPdfForCategoryChange } from '../lib/catalogPdfCache.js'
 import { PdfGenerationAbortedError } from '../lib/pdfGenerationError.js'
 
 const router = Router()
@@ -137,6 +137,8 @@ router.put('/:id', requireAdmin, async (req, res) => {
 
     const e = existing[0]
     const { name, description, image_url, published, sort_order, parent_id } = req.body
+    const nextParentId = parent_id !== undefined ? (parent_id || null) : e.parent_id
+    const parentChanged = parent_id !== undefined && nextParentId !== e.parent_id
 
     const { rows } = await query(
       `UPDATE categories
@@ -150,10 +152,17 @@ router.put('/:id', requireAdmin, async (req, res) => {
         image_url ?? e.image_url,
         published !== undefined ? published : e.published,
         sort_order ?? e.sort_order,
-        parent_id !== undefined ? (parent_id || null) : e.parent_id,
+        nextParentId,
         req.params.id,
       ],
     )
+    try {
+      await invalidateCatalogPdfForCategoryChange(rows[0].id, {
+        previousParentId: parentChanged ? e.parent_id : null,
+      })
+    } catch (err) {
+      console.error('Catalog PDF cache invalidation failed after category update:', err)
+    }
     res.json(rows[0])
   } catch {
     res.status(500).json({ error: 'Ошибка сервера' })
@@ -162,8 +171,17 @@ router.put('/:id', requireAdmin, async (req, res) => {
 
 router.delete('/:id', requireAdmin, async (req, res) => {
   try {
-    const { rowCount } = await query('DELETE FROM categories WHERE id = $1', [req.params.id])
-    if (rowCount === 0) return res.status(404).json({ error: 'Категория не найдена' })
+    const { rows: existing } = await query('SELECT id, parent_id FROM categories WHERE id = $1', [req.params.id])
+    if (!existing[0]) return res.status(404).json({ error: 'Категория не найдена' })
+
+    try {
+      await invalidateCatalogPdfForCategoryChange(existing[0].id, {
+        previousParentId: existing[0].parent_id,
+      })
+    } catch (err) {
+      console.error('Catalog PDF cache invalidation failed before category delete:', err)
+    }
+    await query('DELETE FROM categories WHERE id = $1', [req.params.id])
     res.json({ success: true })
   } catch {
     res.status(500).json({ error: 'Ошибка сервера' })
